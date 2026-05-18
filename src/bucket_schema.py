@@ -22,9 +22,13 @@ class Bucket:
             self.right_bound = 999
         self.inner_bounds = self.calculate_thresholds(self.num_inner_bounds)
     def calculate_thresholds(self, num_boundaries: int) -> list[float]:
-        boundaries: float = (self.right_bound-self.left_bound)/num_boundaries
-        res=[]
-        for i in range(num_boundaries+1):
-            res.append(self.left_bound+boundaries*i)
-        return res
+        left = float(self.left_bound if self.left_bound is not None else 0)
+        right = float(self.right_bound if self.right_bound is not None else 999)
+
+        if self.left_bound is None:
+            return [left, right + 0.5]
+        if self.right_bound is None:
+            return [left + 0.5, right]
+
+        return [left + 0.5, right + 0.5]
 
