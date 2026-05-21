@@ -1,13 +1,27 @@
-from bucket_schema import (
-    Bucket,
-    validate_buckets,
-    bucket_for_actual_temp,
-    format_bucket_interval,
-)
-from error_boundaries import (
-    buckets_to_error_intervals,
-    extract_cdf_boundaries,
-)
+try:
+    from .bucket_schema import (
+        Bucket,
+        bucket_for_actual_temp,
+        format_bucket_interval,
+        validate_buckets,
+    )
+    from .error_boundaries import (
+        buckets_to_error_intervals,
+        convert_market_to_boundaries,
+        extract_cdf_boundaries,
+    )
+except ImportError:
+    from bucket_schema import (
+        Bucket,
+        bucket_for_actual_temp,
+        format_bucket_interval,
+        validate_buckets,
+    )
+    from error_boundaries import (
+        buckets_to_error_intervals,
+        convert_market_to_boundaries,
+        extract_cdf_boundaries,
+    )
 
 
 def format_bound(value: float | None) -> str:
@@ -32,48 +46,14 @@ def format_error_interval(interval) -> str:
 
 
 def build_demo_buckets(location: str) -> list[Bucket]:
-    return [
-        Bucket(
-            location=location,
-            name="71 or lower",
-            reported_lower=None,
-            reported_upper=71,
-        ),
-        Bucket(
-            location=location,
-            name="72",
-            reported_lower=72,
-            reported_upper=72,
-        ),
-        Bucket(
-            location=location,
-            name="73",
-            reported_lower=73,
-            reported_upper=73,
-        ),
-        Bucket(
-            location=location,
-            name="74",
-            reported_lower=74,
-            reported_upper=74,
-        ),
-        Bucket(
-            location=location,
-            name="75",
-            reported_lower=75,
-            reported_upper=75,
-        ),
-        Bucket(
-            location=location,
-            name="76 or higher",
-            reported_lower=76,
-            reported_upper=None,
-        ),
-    ]
+    return convert_market_to_boundaries(
+        [69, 70, 71, 72, 73, 74, 75, 76, 77, 78],
+        location,
+    )
 
 
 def run_manual_resolution_checks(buckets: list[Bucket]) -> None:
-    test_actual_highs = [60, 71.5, 72, 72.5, 72.5001, 73, 73.5, 75.5, 80]
+    test_actual_highs = [60, 69.5, 70, 71.5, 71.5001, 72, 73.5, 77.5, 80]
 
     print("\nManual bucket-resolution checks:")
 

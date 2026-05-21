@@ -2,9 +2,17 @@ from scipy.stats import norm
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
-from bucket_schema import Bucket
-from error_boundaries import convert_market_to_boundaries
-def normal_cdf(x: float, mu: float, sigma: float) -> float:
+
+try:
+    from .bucket_schema import Bucket
+except ImportError:
+    from bucket_schema import Bucket
+
+
+def normal_cdf(x: float | np.ndarray, mu: float, sigma: float) -> float | np.ndarray:
+    if sigma <= 0:
+        raise ValueError("sigma must be greater than 0")
+
     return norm.cdf(x, loc=mu, scale=sigma)
 
 def plot_and_save_cdf(mu: float = 1, sigma: float = 1, filename: str = 'normal_cdf.png') -> None:
@@ -25,19 +33,30 @@ def plot_and_save_cdf(mu: float = 1, sigma: float = 1, filename: str = 'normal_c
 
 
 
-def normal_bucket_prob(lower_bound: float, upper_bound: float, mu: float, sigma: float) -> float:
+def normal_bucket_prob(lower_bound: float | None, upper_bound: float | None, mu: float, sigma: float) -> float:
     if lower_bound is None and upper_bound is None:
         raise ValueError("Both lower and upper bounds cannot be None")
+
+    if lower_bound is not None and upper_bound is not None and upper_bound <= lower_bound:
+        raise ValueError("upper_bound must be greater than lower_bound")
+
     if lower_bound is None:
         lower_bound = -np.inf
     if upper_bound is None:
         upper_bound = np.inf
-    return normal_cdf(upper_bound, mu, sigma) - normal_cdf(lower_bound, mu, sigma)
 
-def normal_bucket_probs(buckets: list[Bucket], mu: float, sigma: float) -> list:
-    probability_list={}
+    return float(normal_cdf(upper_bound, mu, sigma) - normal_cdf(lower_bound, mu, sigma))
+
+
+def normal_bucket_probs(buckets: list[Bucket], mu: float, sigma: float) -> dict[str, float]:
+    probability_list: dict[str, float] = {}
     for bucket in buckets:
-        probability_list[bucket] = normal_bucket_prob(bucket.lower_bound, bucket.upper_bound, mu, sigma)
+        probability_list[bucket.name] = normal_bucket_prob(
+            bucket.lower_bound,
+            bucket.upper_bound,
+            mu,
+            sigma,
+        )
     return probability_list
 
 

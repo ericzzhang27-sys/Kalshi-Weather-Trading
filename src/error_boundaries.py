@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
-from bucket_schema import Bucket
+try:
+    from .bucket_schema import Bucket, validate_buckets
+except ImportError:
+    from bucket_schema import Bucket, validate_buckets
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,71 @@ def bucket_to_error_interval(bucket: Bucket, forecast_high: float) -> ErrorInter
         bucket_name=bucket.name,
         lower_error=lower_error,
         upper_error=upper_error,
+    )
+
+
+def convert_market_to_boundaries(temperatures: list[int], location: str) -> list[Bucket]:
+    """
+    Builds Kalshi-style two-degree interior buckets from sorted temperatures.
+
+    For [69, 70, 71, 72, 73, 74, 75, 76, 77, 78], this returns:
+    69 or lower, 70 to 71, 72 to 73, 74 to 75, 76 to 77, 78 or higher.
+    """
+    if len(temperatures) < 4:
+        raise ValueError("temperatures must contain at least four bucket labels")
+
+    if temperatures != sorted(temperatures):
+        raise ValueError(f"temperatures must be sorted ascending. Got: {temperatures}")
+
+    if len(set(temperatures)) != len(temperatures):
+        raise ValueError(f"temperatures cannot contain duplicates. Got: {temperatures}")
+
+    if len(temperatures) % 2 != 0:
+        raise ValueError(
+            "temperatures must contain an even count so interior labels form pairs"
+        )
+
+    buckets = [
+        Bucket(
+            location=location,
+            name=f"{temperatures[0]} or lower",
+            lower_bound=None,
+            upper_bound=temperatures[0] + 0.5,
+        )
+    ]
+
+    for i in range(1, len(temperatures) - 1, 2):
+        lower_temperature = temperatures[i]
+        upper_temperature = temperatures[i + 1]
+        buckets.append(
+            Bucket(
+                location=location,
+                name=f"{lower_temperature} to {upper_temperature}",
+                lower_bound=lower_temperature - 0.5,
+                upper_bound=upper_temperature + 0.5,
+            )
+        )
+
+    buckets.append(
+        Bucket(
+            location=location,
+            name=f"{temperatures[-1]} or higher",
+            lower_bound=temperatures[-1] - 0.5,
+            upper_bound=None,
+        )
+    )
+
+    validate_buckets(buckets)
+    return buckets
+
+
+def convert_nws_to_boundaries(temperature: int, location: str) -> list[Bucket]:
+    """
+    Builds a six-bucket market centered near an NWS forecast high.
+    """
+    return convert_market_to_boundaries(
+        list(range(temperature - 4, temperature + 6)),
+        location,
     )
 
 

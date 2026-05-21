@@ -1,22 +1,24 @@
-
-
-from distribution_pricing import normal_cdf, normal_bucket_prob
-from bucket_schema import Bucket
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from error_boundaries import convert_market_to_boundaries
+try:
+    from .bucket_schema import Bucket
+    from .distribution_pricing import normal_cdf, normal_bucket_prob
+    from .error_boundaries import convert_market_to_boundaries
+except ImportError:
+    from bucket_schema import Bucket
+    from distribution_pricing import normal_cdf, normal_bucket_prob
+    from error_boundaries import convert_market_to_boundaries
 
 def get_bounds(buckets: list[Bucket]) -> list[float]:
-    """Return sorted unique finite boundary values from bucket inner bounds."""
+    """Return sorted unique finite boundary values from buckets."""
     bounds = []
     for bucket in buckets:
-        lower, upper = bucket.inner_bounds
-        if np.isfinite(lower):
-            bounds.append(lower)
-        if np.isfinite(upper):
-            bounds.append(upper)
+        if bucket.lower_bound is not None:
+            bounds.append(bucket.lower_bound)
+        if bucket.upper_bound is not None:
+            bounds.append(bucket.upper_bound)
 
     return sorted(set(bounds))
 
@@ -95,6 +97,6 @@ def plot_cdf_with_probabilities(
     print(f"Plot saved to {output_path}")
 
 if __name__ == "__main__":
-    market_boundaries = convert_market_to_boundaries([56, 57, 58, 59, 60, 61, 62, 63, 64, 65], "Chicago")
+    market_boundaries = convert_market_to_boundaries([69, 70, 71, 72, 73, 74, 75, 76, 77, 78], "Chicago")
     bounds = get_bounds(market_boundaries)
-    plot_cdf_with_probabilities(market_boundaries, 62.5, 1.8)
+    plot_cdf_with_probabilities(market_boundaries, 73.0, 1.8)
