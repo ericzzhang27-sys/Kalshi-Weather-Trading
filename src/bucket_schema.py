@@ -1,5 +1,5 @@
 from dataclasses import dataclass,field
-import numpy as np
+
 @dataclass
 class Bucket:
     location: str
@@ -17,18 +17,18 @@ class Bucket:
         if self.num_inner_bounds < 1:
             raise ValueError("num_inner_bounds must be greater than 0")
         if self.left_bound is None:
-            self.left_bound = -np.inf
+            self.left_bound = 0
         if self.right_bound is None:
-            self.right_bound = np.inf
+            self.right_bound = 999
         self.inner_bounds = self.calculate_thresholds(self.num_inner_bounds)
     def calculate_thresholds(self, num_boundaries: int) -> list[float]:
-        left = float(self.left_bound if self.left_bound is not None else -np.inf)
-        right = float(self.right_bound if self.right_bound is not None else np.inf)
+        left = float(self.left_bound if self.left_bound is not None else 0)
+        right = float(self.right_bound if self.right_bound is not None else 999)
 
         if self.left_bound is None:
-            return [left, right - 0.5]
+            return [left, right + 0.5]
         if self.right_bound is None:
-            return [left - 0.5, right]
+            return [left + 0.5, right]
 
-        return [left - 0.5, right + 0.5]
+        return [left + 0.5, right + 0.5]
 
