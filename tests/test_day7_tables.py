@@ -70,7 +70,7 @@ def test_daily_target_validation_rejects_duplicate_keys() -> None:
         validate_daily_targets(duplicated)
 
 
-def test_supervised_rows_expand_each_daily_target_to_four_prediction_times() -> None:
+def test_supervised_rows_expand_each_daily_target_to_hourly_prediction_times() -> None:
     targets = build_daily_forecast_error_targets(
         _sample_daily_actuals(),
         _sample_daily_forecasts(),
@@ -79,11 +79,17 @@ def test_supervised_rows_expand_each_daily_target_to_four_prediction_times() -> 
 
     validate_supervised_rows(supervised)
 
-    assert len(supervised) == 8
-    assert supervised.groupby(["date", "location"]).size().tolist() == [4, 4]
+    assert len(supervised) == 2 * len(PREDICTION_TIMES)
+    assert supervised.groupby(["date", "location"]).size().tolist() == [
+        len(PREDICTION_TIMES),
+        len(PREDICTION_TIMES),
+    ]
     assert sorted(supervised["prediction_time"].unique()) == sorted(PREDICTION_TIMES)
     assert supervised["forecast_error"].isna().sum() == 0
-    assert supervised.loc[0, "prediction_timestamp"] == pd.Timestamp("2026-05-20 09:00")
+    assert supervised.loc[0, "prediction_timestamp"] == pd.Timestamp("2026-05-20 00:00")
+    assert supervised.loc[len(PREDICTION_TIMES) - 1, "prediction_timestamp"] == pd.Timestamp(
+        "2026-05-20 23:00"
+    )
 
 
 def test_supervised_validation_rejects_duplicate_prediction_rows() -> None:

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 
-PREDICTION_TIMES = ["09:00", "11:00", "13:00", "15:00"]
+PREDICTION_TIMES = [f"{hour:02d}:00" for hour in range(24)]
 TARGET_COLUMN = "forecast_error"
 AUDIT_ONLY_COLUMNS = ["actual_high"]
 BASELINE_FEATURE_COLUMNS = ["forecast_high"]
@@ -21,7 +21,7 @@ SUPERVISED_REQUIRED_COLUMNS = [
 
 def define_prediction_times() -> list[str]:
     """
-    Return the prediction times used for Day 7.
+    Return the hourly prediction times used for Day 7+.
     """
     return list(PREDICTION_TIMES)
 
