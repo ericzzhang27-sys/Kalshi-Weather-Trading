@@ -62,6 +62,28 @@ def _sample_hourly() -> pd.DataFrame:
     )
 
 
+def _sample_hourly_forecasts() -> pd.DataFrame:
+    timestamps = pd.to_datetime(
+        [
+            "2026-05-20 06:00",
+            "2026-05-20 07:00",
+            "2026-05-20 08:00",
+            "2026-05-20 09:00",
+            "2026-05-20 10:00",
+            "2026-05-20 11:00",
+            "2026-05-20 15:00",
+        ]
+    )
+    return pd.DataFrame(
+        {
+            "timestamp": timestamps,
+            "target_date": timestamps.normalize(),
+            "location": ["NYC"] * len(timestamps),
+            "temperature_2m": [55.0, 64.0, 68.0, 76.0, 85.0, 98.0, 105.0],
+        }
+    )
+
+
 def test_time_features_use_prediction_time_and_3pm_peak() -> None:
     featured = add_time_features(_sample_rows().iloc[[0]].copy())
 
@@ -90,6 +112,42 @@ def test_max_temp_so_far_uses_only_observations_at_or_before_prediction_time() -
         pd.to_datetime(featured["max_temp_so_far_source_time"])
         <= pd.to_datetime(featured["prediction_time"])
     ).all()
+
+
+def test_sequential_context_features_are_cumulative_and_timestamp_safe() -> None:
+    inputs = {
+        "rows": _sample_rows(),
+        "hourly": _sample_hourly(),
+        "hourly_forecasts": _sample_hourly_forecasts(),
+        "forecasts": pd.DataFrame(),
+        "notes": [],
+    }
+    featured = build_feature_matrix(inputs)
+
+    row_9am = featured.loc[featured["prediction_time"] == pd.Timestamp("2026-05-20 09:00")].iloc[0]
+    row_11am = featured.loc[featured["prediction_time"] == pd.Timestamp("2026-05-20 11:00")].iloc[0]
+
+    assert row_9am["current_temp_minus_max_so_far"] == 0.0
+    assert row_9am["minutes_since_max_temp_so_far"] == 0.0
+    assert row_9am["hour_of_max_temp_so_far"] == 9.0
+    assert row_9am["max_so_far_minus_forecast_high"] == -25.0
+    assert row_9am["mean_temp_error_so_far"] == 1.75
+    assert row_9am["max_temp_error_so_far"] == -1.0
+    assert row_9am["num_new_highs_last_3h"] == 3
+    assert row_9am["temp_range_so_far"] == 15.0
+    assert row_9am["area_under_temp_curve_so_far"] == 202.5
+    assert row_9am["near_boundary_duration_so_far"] == 4
+
+    assert row_11am["max_temp_so_far"] == 100.0
+    assert row_11am["temp_range_so_far"] == 40.0
+    assert row_11am["area_under_temp_curve_so_far"] == 380.0
+    assert row_11am["mean_temp_error_so_far"] == 14.0 / 6.0
+    assert row_11am["max_temp_error_so_far"] == 2.0
+    assert row_11am["num_new_highs_last_3h"] == 3
+
+    assert row_9am["max_temp_so_far"] < 110.0
+    assert row_9am["temp_range_so_far"] < 50.0
+    assert row_9am["area_under_temp_curve_so_far"] < row_11am["area_under_temp_curve_so_far"]
 
 
 def test_feature_columns_exclude_target_and_actual_high(tmp_path: Path) -> None:

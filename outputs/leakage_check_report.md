@@ -41,5 +41,8 @@ Overall status: **WARN**
 - forecast_horizon_hours and minutes_until_typical_peak use 3 PM local time on target_date as the typical peak temperature time.
 - temp_change_30m skipped; hourly_clean.csv cadence is hourly, so 30-minute temperature change would fake unavailable precision.
 - cloud_cover_next_3h and precip_probability_next_3h skipped because hourly forecast issue/run timestamps are unavailable; future valid times cannot be proven to come from a run issued at or before prediction_time.
+- num_new_highs_last_3h counts strict new observed highs in the trailing (prediction_time - 3h, prediction_time] window.
+- area_under_temp_curve_so_far is a cumulative hourly trapezoid integral of observed temperature from the start of target_date through prediction_time.
+- near_boundary_duration_so_far follows the requested definition abs(temp - round(temp)) <= 0.5°F, so it counts non-missing hourly observations under normal numeric rounding.
 - minutes_until_sunset skipped; no extra solar dependency was added for Day 8.
 - recent_forecast_revision, forecast_spread, and model_disagreement skipped; forecasts_clean.csv has no repeated issue/run timestamp.

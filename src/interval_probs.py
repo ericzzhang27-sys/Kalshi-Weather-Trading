@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
+import warnings
 
 
 Interval = tuple[float | None, float | None]
@@ -21,6 +23,75 @@ def _clip_tiny_negative(value: float) -> float:
     if value < 0.0 and value >= -_TINY_NEGATIVE_TOL:
         return 0.0
     return value
+
+
+def _clean_float_artifact(value: float) -> float:
+    rounded = round(value, 15)
+    if math.isclose(value, rounded, rel_tol=0.0, abs_tol=1e-15):
+        return float(rounded)
+    return value
+
+
+def _cdf_probability_value(cdf: Callable[[float], float], boundary: float) -> float:
+    value = float(cdf(boundary))
+    if not math.isfinite(value):
+        raise ValueError(f"CDF returned non-finite value at {boundary:g}: {value!r}")
+    if value < -_TINY_NEGATIVE_TOL or value > 1.0 + _TINY_NEGATIVE_TOL:
+        raise ValueError(
+            f"CDF value at {boundary:g} must be between 0 and 1, got {value!r}"
+        )
+    if value < 0.0:
+        return 0.0
+    if value > 1.0:
+        return 1.0
+    return value
+
+
+def interval_probability(
+    cdf: Callable[[float], float],
+    lower: float | None,
+    upper: float | None,
+) -> float:
+    """
+    Compute P(lower < error <= upper) from any callable CDF.
+
+    None lower means F(-inf)=0, None upper means F(+inf)=1.
+    """
+    if lower is None and upper is None:
+        return 1.0
+
+    if lower is not None:
+        lower_float = _finite_boundary(lower, name="Lower")
+    else:
+        lower_float = None
+
+    if upper is not None:
+        upper_float = _finite_boundary(upper, name="Upper")
+    else:
+        upper_float = None
+
+    if lower_float is not None and upper_float is not None and upper_float <= lower_float:
+        raise ValueError(
+            f"Interval upper boundary must exceed lower boundary: {(lower, upper)!r}"
+        )
+
+    lower_cdf = 0.0 if lower_float is None else _cdf_probability_value(cdf, lower_float)
+    upper_cdf = 1.0 if upper_float is None else _cdf_probability_value(cdf, upper_float)
+    probability = float(upper_cdf - lower_cdf)
+
+    if not math.isfinite(probability):
+        raise ValueError(
+            f"Interval probability is not finite for {(lower, upper)!r}: {probability!r}"
+        )
+
+    if probability < -_TINY_NEGATIVE_TOL:
+        raise ValueError(
+            "CDF produced a negative interval probability. "
+            f"Interval={(lower, upper)!r}, F(lower)={lower_cdf:.12g}, "
+            f"F(upper)={upper_cdf:.12g}"
+        )
+
+    return _clean_float_artifact(_clip_tiny_negative(probability))
 
 
 def cdf_to_interval_probs(
@@ -55,20 +126,55 @@ def cdf_to_interval_probs(
         if lower is None and upper is None:
             raise ValueError("Interval cannot have both boundaries open")
 
-        if lower is None:
-            probability = lookup(upper)
-        elif upper is None:
-            probability = 1.0 - lookup(lower)
-        else:
-            lower_float = _finite_boundary(lower, name="Lower")
-            upper_float = _finite_boundary(upper, name="Upper")
-            if upper_float <= lower_float:
-                raise ValueError(f"Interval upper boundary must exceed lower boundary: {interval!r}")
-            probability = lookup(upper_float) - lookup(lower_float)
-
-        probs[interval] = _clip_tiny_negative(float(probability))
+        probs[interval] = interval_probability(lookup, lower, upper)
 
     return probs
+
+
+def normalize_probabilities(
+    probs: list[float],
+    tolerance: float = 1e-8,
+) -> list[float]:
+    """
+    Clip tiny negative probabilities and renormalize to sum to one.
+    """
+    if len(probs) == 0:
+        raise ValueError("Probability list cannot be empty")
+    if tolerance < 0.0 or not math.isfinite(float(tolerance)):
+        raise ValueError(f"tolerance must be nonnegative and finite, got {tolerance!r}")
+
+    cleaned: list[float] = []
+    clipped_mass = 0.0
+    for probability in probs:
+        value = float(probability)
+        if not math.isfinite(value):
+            raise ValueError(f"Probability is not finite: {probability!r}")
+        if value < 0.0:
+            if value < -tolerance:
+                raise ValueError(f"Probability is negative beyond tolerance: {probability!r}")
+            clipped_mass += abs(value)
+            value = 0.0
+        cleaned.append(value)
+
+    if clipped_mass > tolerance:
+        warnings.warn(
+            f"Clipped {clipped_mass:.12g} negative probability mass before normalization",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+    total = float(sum(cleaned))
+    if not math.isfinite(total) or total <= 0.0:
+        raise ValueError(f"Cannot normalize probabilities with invalid total mass: {total!r}")
+
+    if abs(total - 1.0) > tolerance:
+        warnings.warn(
+            f"Normalizing probabilities with total mass {total:.12g}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+    return [probability / total for probability in cleaned]
 
 
 def normalize_probs(
@@ -77,21 +183,15 @@ def normalize_probs(
     """
     Normalize interval probabilities to sum to one.
     """
-    cleaned: dict[Interval, float] = {}
-    for interval, probability in probs.items():
-        value = float(probability)
-        if not math.isfinite(value):
-            raise ValueError(f"Probability for interval {interval!r} is not finite: {probability!r}")
-        value = _clip_tiny_negative(value)
-        if value < 0.0:
-            raise ValueError(f"Probability for interval {interval!r} is negative: {probability!r}")
-        cleaned[interval] = value
-
-    total = float(sum(cleaned.values()))
-    if not math.isfinite(total) or total <= 0.0:
-        raise ValueError(f"Cannot normalize probabilities with invalid total mass: {total!r}")
-
-    return {interval: probability / total for interval, probability in cleaned.items()}
+    intervals = list(probs)
+    probabilities = normalize_probabilities(
+        [float(probs[interval]) for interval in intervals],
+        tolerance=_TINY_NEGATIVE_TOL,
+    )
+    return {
+        interval: probability
+        for interval, probability in zip(intervals, probabilities)
+    }
 
 
 def validate_interval_probs(

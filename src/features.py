@@ -24,6 +24,18 @@ DEFAULT_INPUT_PATHS = {
 TARGET_COLUMN = "forecast_error"
 TYPICAL_PEAK_HOUR = 15
 TEMP_CHANGE_WINDOWS_MINUTES = [60, 120, 180, 240, 300]
+SEQUENTIAL_CONTEXT_FEATURES = [
+    "current_temp_minus_max_so_far",
+    "minutes_since_max_temp_so_far",
+    "hour_of_max_temp_so_far",
+    "max_so_far_minus_forecast_high",
+    "mean_temp_error_so_far",
+    "max_temp_error_so_far",
+    "num_new_highs_last_3h",
+    "temp_range_so_far",
+    "area_under_temp_curve_so_far",
+    "near_boundary_duration_so_far",
+]
 
 ISSUE_TIME_CANDIDATES = [
     "issue_time",
@@ -492,6 +504,144 @@ def _build_cumulative_max_table(
     return pd.concat(pieces, ignore_index=True)
 
 
+def _build_observed_context_table(hourly: pd.DataFrame, temp_col: str) -> pd.DataFrame:
+    pieces: list[pd.DataFrame] = []
+    required_cols = ["location", "target_date", "timestamp", temp_col]
+    working = hourly.dropna(subset=["location", "target_date", "timestamp"]).loc[
+        :,
+        required_cols,
+    ].copy()
+
+    for _, group in working.sort_values("timestamp").groupby(
+        ["location", "target_date"],
+        dropna=False,
+    ):
+        current_max = -np.inf
+        current_min = np.inf
+        observed_count = 0
+        near_boundary_count = 0
+        area = 0.0
+        prev_time: pd.Timestamp | None = None
+        prev_temp: float | None = None
+
+        max_values: list[float] = []
+        min_values: list[float] = []
+        range_values: list[float] = []
+        area_values: list[float] = []
+        near_boundary_values: list[int] = []
+        new_high_rows: list[dict[str, Any]] = []
+
+        for _, row in group.iterrows():
+            timestamp = row["timestamp"]
+            value = row[temp_col]
+            numeric_value = float(value) if pd.notna(value) else np.nan
+
+            if prev_time is not None and prev_temp is not None and pd.notna(numeric_value):
+                elapsed_hours = (timestamp - prev_time).total_seconds() / 3600.0
+                if elapsed_hours >= 0:
+                    area += ((prev_temp + numeric_value) / 2.0) * elapsed_hours
+
+            is_new_high = False
+            if pd.notna(numeric_value):
+                observed_count += 1
+                if numeric_value > current_max:
+                    current_max = numeric_value
+                    is_new_high = True
+                if numeric_value < current_min:
+                    current_min = numeric_value
+                if abs(numeric_value - round(numeric_value)) <= 0.5:
+                    near_boundary_count += 1
+
+            new_high_rows.append({"timestamp": timestamp, "is_new_high": int(is_new_high)})
+            max_value = np.nan if current_max == -np.inf else current_max
+            min_value = np.nan if current_min == np.inf else current_min
+            max_values.append(max_value)
+            min_values.append(min_value)
+            range_values.append(max_value - min_value if pd.notna(max_value) and pd.notna(min_value) else np.nan)
+            area_values.append(area if observed_count else np.nan)
+            near_boundary_values.append(near_boundary_count)
+
+            prev_time = timestamp
+            prev_temp = numeric_value if pd.notna(numeric_value) else None
+
+        trailing_new_high_counts: list[int] = []
+        new_high_frame = pd.DataFrame(new_high_rows)
+        for _, row in new_high_frame.iterrows():
+            window_start = row["timestamp"] - pd.Timedelta(hours=3)
+            in_window = (
+                (new_high_frame["timestamp"] > window_start)
+                & (new_high_frame["timestamp"] <= row["timestamp"])
+            )
+            trailing_new_high_counts.append(int(new_high_frame.loc[in_window, "is_new_high"].sum()))
+
+        enriched = group.loc[:, ["location", "target_date", "timestamp"]].copy()
+        enriched["min_temp_so_far"] = min_values
+        enriched["temp_range_so_far"] = range_values
+        enriched["area_under_temp_curve_so_far"] = area_values
+        enriched["near_boundary_duration_so_far"] = near_boundary_values
+        enriched["num_new_highs_last_3h"] = trailing_new_high_counts
+        pieces.append(enriched)
+
+    if not pieces:
+        return pd.DataFrame(
+            columns=[
+                "location",
+                "target_date",
+                "timestamp",
+                "min_temp_so_far",
+                "temp_range_so_far",
+                "area_under_temp_curve_so_far",
+                "near_boundary_duration_so_far",
+                "num_new_highs_last_3h",
+            ],
+        )
+    return pd.concat(pieces, ignore_index=True)
+
+
+def _build_cumulative_temp_error_table(
+    hourly: pd.DataFrame,
+    hourly_forecasts: pd.DataFrame,
+    *,
+    temp_col: str,
+    forecast_temp_col: str,
+) -> pd.DataFrame:
+    output_columns = [
+        "location",
+        "target_date",
+        "timestamp",
+        "mean_temp_error_so_far",
+    ]
+    if hourly.empty or hourly_forecasts.empty:
+        return pd.DataFrame(columns=output_columns)
+
+    observed = hourly.loc[:, ["location", "target_date", "timestamp", temp_col]].rename(
+        columns={temp_col: "actual_temp_for_error"},
+    )
+    forecasts = hourly_forecasts.loc[
+        :,
+        ["location", "target_date", "timestamp", forecast_temp_col],
+    ].rename(columns={forecast_temp_col: "forecast_temp_for_error"})
+
+    merged = observed.merge(
+        forecasts,
+        on=["location", "target_date", "timestamp"],
+        how="left",
+        validate="one_to_one",
+    )
+    merged["temp_error"] = (
+        pd.to_numeric(merged["actual_temp_for_error"], errors="coerce")
+        - pd.to_numeric(merged["forecast_temp_for_error"], errors="coerce")
+    )
+    merged = merged.sort_values(["location", "target_date", "timestamp"])
+    merged["mean_temp_error_so_far"] = (
+        merged.groupby(["location", "target_date"], dropna=False)["temp_error"]
+        .expanding()
+        .mean()
+        .reset_index(level=[0, 1], drop=True)
+    )
+    return merged.loc[:, output_columns]
+
+
 def add_observed_weather_features(rows: pd.DataFrame, hourly: pd.DataFrame) -> pd.DataFrame:
     result = rows.copy()
     _merge_notes(result, rows)
@@ -859,6 +1009,123 @@ def add_forecast_relative_features(
     return result
 
 
+def add_sequential_context_features(
+    rows: pd.DataFrame,
+    hourly: pd.DataFrame,
+    hourly_forecasts: pd.DataFrame,
+) -> pd.DataFrame:
+    result = rows.copy()
+    _merge_notes(result, rows)
+
+    for column in SEQUENTIAL_CONTEXT_FEATURES:
+        if column not in result.columns:
+            result[column] = np.nan
+
+    if {"current_temp", "max_temp_so_far"}.issubset(result.columns):
+        result["current_temp_minus_max_so_far"] = (
+            result["current_temp"] - result["max_temp_so_far"]
+        )
+
+    if "max_temp_so_far_source_time" in result.columns:
+        max_source_time = pd.to_datetime(result["max_temp_so_far_source_time"], errors="coerce")
+        prediction_time = pd.to_datetime(result["prediction_time"], errors="coerce")
+        result["minutes_since_max_temp_so_far"] = (
+            prediction_time - max_source_time
+        ).dt.total_seconds() / 60.0
+        result["hour_of_max_temp_so_far"] = max_source_time.dt.hour.astype(float)
+
+    if {"max_temp_so_far", "forecast_high"}.issubset(result.columns):
+        result["max_so_far_minus_forecast_high"] = (
+            result["max_temp_so_far"] - result["forecast_high"]
+        )
+
+    if {"max_temp_so_far", "forecast_max_so_far"}.issubset(result.columns):
+        result["max_temp_error_so_far"] = (
+            result["max_temp_so_far"] - result["forecast_max_so_far"]
+        )
+
+    if hourly.empty:
+        _append_note(
+            result,
+            "Sequential observed context features that require hourly history were skipped "
+            "because hourly_clean.csv is missing.",
+        )
+        return result
+
+    temp_col = _first_existing(hourly, TEMPERATURE_CANDIDATES)
+    if temp_col is None:
+        _append_note(
+            result,
+            "Sequential observed context features that require temperature were skipped; "
+            "no hourly temperature column found.",
+        )
+        return result
+
+    context_table = _build_observed_context_table(hourly, temp_col)
+    context = _latest_at_or_before(
+        result,
+        context_table,
+        by=["location", "target_date"],
+        left_time_col="prediction_time",
+        right_time_col="timestamp",
+        value_cols=[
+            "temp_range_so_far",
+            "area_under_temp_curve_so_far",
+            "near_boundary_duration_so_far",
+            "num_new_highs_last_3h",
+        ],
+        tolerance=pd.Timedelta(hours=24),
+    )
+    for column in context.columns:
+        result[column] = context[column]
+
+    forecast_temp_col = (
+        _first_existing(hourly_forecasts, TEMPERATURE_CANDIDATES)
+        if not hourly_forecasts.empty
+        else None
+    )
+    if forecast_temp_col is None:
+        _append_note(
+            result,
+            "mean_temp_error_so_far skipped; hourly forecast temperature is unavailable.",
+        )
+    else:
+        error_table = _build_cumulative_temp_error_table(
+            hourly,
+            hourly_forecasts,
+            temp_col=temp_col,
+            forecast_temp_col=forecast_temp_col,
+        )
+        temp_error = _latest_at_or_before(
+            result,
+            error_table,
+            by=["location", "target_date"],
+            left_time_col="prediction_time",
+            right_time_col="timestamp",
+            value_cols=["mean_temp_error_so_far"],
+            tolerance=pd.Timedelta(hours=24),
+        )
+        result["mean_temp_error_so_far"] = temp_error["mean_temp_error_so_far"]
+
+    _append_note(
+        result,
+        "num_new_highs_last_3h counts strict new observed highs in the trailing "
+        "(prediction_time - 3h, prediction_time] window.",
+    )
+    _append_note(
+        result,
+        "area_under_temp_curve_so_far is a cumulative hourly trapezoid integral "
+        "of observed temperature from the start of target_date through prediction_time.",
+    )
+    _append_note(
+        result,
+        "near_boundary_duration_so_far follows the requested definition "
+        "abs(temp - round(temp)) <= 0.5°F, so it counts non-missing hourly "
+        "observations under normal numeric rounding.",
+    )
+    return result
+
+
 def add_solar_time_features(df: pd.DataFrame) -> pd.DataFrame:
     result = df.copy()
     prediction_time = pd.to_datetime(result["prediction_time"], errors="raise")
@@ -995,6 +1262,12 @@ def build_feature_matrix(
     hourly_forecasts = inputs.get("hourly_forecasts", _empty_frame())
     result = add_forecast_relative_features(
         result,
+        hourly_forecasts if isinstance(hourly_forecasts, pd.DataFrame) else _empty_frame(),
+    )
+
+    result = add_sequential_context_features(
+        result,
+        hourly if isinstance(hourly, pd.DataFrame) else _empty_frame(),
         hourly_forecasts if isinstance(hourly_forecasts, pd.DataFrame) else _empty_frame(),
     )
 

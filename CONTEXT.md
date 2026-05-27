@@ -251,7 +251,7 @@ Current Day 8 build result:
 
 - Rows: 38,424
 - Columns in modeling table: 40
-- Model feature columns: 29
+- Model feature columns: 39
 - Critical rows dropped: 0
 - Target date range: 2022-01-01 to 2026-05-20
 - Prediction timestamp range: 2022-01-01 00:00:00 to 2026-05-20 23:00:00
@@ -312,6 +312,16 @@ Added from `hourly_clean.csv`:
 - `temp_change_300m`
 - `temp_acceleration_60m`
 - `temp_change_60m_minus_3h_avg_rate`
+- `current_temp_minus_max_so_far`
+- `minutes_since_max_temp_so_far`
+- `hour_of_max_temp_so_far`
+- `max_so_far_minus_forecast_high`
+- `mean_temp_error_so_far`
+- `max_temp_error_so_far`
+- `num_new_highs_last_3h`
+- `temp_range_so_far`
+- `area_under_temp_curve_so_far`
+- `near_boundary_duration_so_far`
 
 Audit metadata:
 
@@ -325,6 +335,12 @@ Timestamp-safe definitions:
 - `temp_change_60m`, `temp_change_120m`, `temp_change_180m`, `temp_change_240m`, and `temp_change_300m` use prior observations at safe lookback times.
 - `temp_acceleration_60m = 2 * temp_change_60m - temp_change_120m`.
 - `temp_change_60m_minus_3h_avg_rate = temp_change_60m - temp_change_180m / 3`.
+- `current_temp_minus_max_so_far` is current observed temperature minus the observed max so far.
+- `minutes_since_max_temp_so_far` and `hour_of_max_temp_so_far` are based on the latest timestamp where the current max so far occurred.
+- `mean_temp_error_so_far` is the cumulative mean of observed hourly temperature minus same-valid-hour forecast temperature from the start of `target_date` through `prediction_time`.
+- `num_new_highs_last_3h` counts strict new observed highs in `(prediction_time - 3h, prediction_time]`.
+- `area_under_temp_curve_so_far` is the cumulative hourly trapezoid integral of observed temperature from the start of `target_date`.
+- `near_boundary_duration_so_far` follows the requested `abs(temp - round(temp)) <= 0.5°F` definition.
 - `temp_change_30m` is present in the table for documentation/missingness but excluded from features because hourly data cannot support true 30-minute precision.
 
 ### Day 8 Forecast-Relative Features
@@ -364,7 +380,7 @@ Reasons:
 
 ### Day 8 Feature Columns
 
-`outputs/feature_columns.json` currently includes these 29 model features:
+`outputs/feature_columns.json` currently includes these 39 model features:
 
 ```text
 forecast_high
@@ -395,6 +411,16 @@ forecast_temp_current_hour
 current_temp_minus_forecast_temp
 forecast_max_so_far
 max_so_far_minus_forecast_max_so_far
+current_temp_minus_max_so_far
+minutes_since_max_temp_so_far
+hour_of_max_temp_so_far
+max_so_far_minus_forecast_high
+mean_temp_error_so_far
+max_temp_error_so_far
+num_new_highs_last_3h
+temp_range_so_far
+area_under_temp_curve_so_far
+near_boundary_duration_so_far
 minutes_until_typical_peak
 ```
 
