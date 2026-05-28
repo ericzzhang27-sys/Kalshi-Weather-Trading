@@ -17,7 +17,7 @@ from src.distribution_pricing import (  # noqa: E402
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = REPO_ROOT / "outputs"
+OUTPUT_DIR = REPO_ROOT / "outputs" / "day10_distribution_pricing"
 FORECAST_HIGH = 73.0
 
 

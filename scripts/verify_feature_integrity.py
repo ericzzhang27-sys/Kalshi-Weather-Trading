@@ -14,7 +14,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
-OUTPUTS_DIR = REPO_ROOT / "outputs"
+OUTPUTS_DIR = REPO_ROOT / "outputs" / "day8_features"
 
 MODELING_ROWS_PATH = PROCESSED_DIR / "modeling_rows_v1.csv"
 FEATURE_COLUMNS_PATH = OUTPUTS_DIR / "feature_columns.json"

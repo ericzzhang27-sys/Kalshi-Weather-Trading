@@ -102,11 +102,11 @@ Core utilities added:
 
 Generated early outputs:
 
-- `outputs/bucket_probability_demo.csv`
-- `outputs/notebook_bucket_probability_demo.csv`
+- `outputs/demos/bucket_probability_demo.csv`
+- `outputs/demos/notebook_bucket_probability_demo.csv`
 - normal CDF figures under `outputs/figures/`
-- `outputs/data_inventory.csv`
-- `outputs/notebook_data_inventory_demo.csv`
+- `outputs/data_audit/data_inventory.csv`
+- `outputs/demos/notebook_data_inventory_demo.csv`
 
 ## Day 6: Data Verification And Cleaning
 
@@ -126,8 +126,8 @@ Main outputs:
 - `data/processed/forecasts_clean.csv`
 - `data/processed/hourly_forecasts_clean.csv`
 - `data/processed/modeling_base_preview.csv`
-- `outputs/data_inventory.csv`
-- `outputs/data_verification_report.md`
+- `outputs/data_audit/data_inventory.csv`
+- `outputs/data_audit/data_verification_report.md`
 
 Cleaned rows:
 
@@ -168,7 +168,7 @@ Main outputs:
 
 - `data/processed/daily_forecast_error_targets.csv`
 - `data/processed/supervised_forecast_error_rows.csv`
-- `outputs/target_summary.csv`
+- `outputs/day7_targets/target_summary.csv`
 - `notebooks/day7_function_guide.ipynb`
 
 Prediction times:
@@ -229,10 +229,10 @@ Main code:
 Main outputs:
 
 - `data/processed/modeling_rows_v1.csv`
-- `outputs/feature_columns.json`
-- `outputs/leakage_check_report.md`
-- `outputs/feature_missingness_report.csv`
-- `outputs/modeling_rows_v1_preview.csv`
+- `outputs/day8_features/feature_columns.json`
+- `outputs/day8_features/leakage_check_report.md`
+- `outputs/day8_features/feature_missingness_report.csv`
+- `outputs/day8_features/modeling_rows_v1_preview.csv`
 - `notebooks/day8_feature_engineering_and_leakage_checks.ipynb`
 
 Day 8 build command:
@@ -380,7 +380,7 @@ Reasons:
 
 ### Day 8 Feature Columns
 
-`outputs/feature_columns.json` currently includes these 39 model features:
+`outputs/day8_features/feature_columns.json` currently includes these 39 model features:
 
 ```text
 forecast_high
@@ -560,7 +560,7 @@ The original 4-week plan lists Day 9 as timestamp-safe forecast features. Becaus
 Any modeling step should use:
 
 - rows from `data/processed/modeling_rows_v1.csv`
-- features from `outputs/feature_columns.json`
+- features from `outputs/day8_features/feature_columns.json`
 - target `forecast_error`
 
-Do not manually type feature columns in modeling scripts; load them from `outputs/feature_columns.json`.
+Do not manually type feature columns in modeling scripts; load them from `outputs/day8_features/feature_columns.json`.

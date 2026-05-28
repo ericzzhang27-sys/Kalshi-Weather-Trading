@@ -32,7 +32,7 @@ from src.weather_data import (  # noqa: E402
 )
 
 
-OUTPUTS_DIR = REPO_ROOT / "outputs"
+OUTPUTS_DIR = REPO_ROOT / "outputs" / "data_audit"
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
 
 DATA_PATH_CANDIDATES = {

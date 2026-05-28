@@ -24,7 +24,7 @@ from src.target_builder import (  # noqa: E402
 
 
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
-OUTPUTS_DIR = REPO_ROOT / "outputs"
+OUTPUTS_DIR = REPO_ROOT / "outputs" / "day7_targets"
 
 DAILY_ACTUAL_INPUT = PROCESSED_DIR / "daily_clean.csv"
 DAILY_FORECAST_INPUT = PROCESSED_DIR / "forecasts_clean.csv"

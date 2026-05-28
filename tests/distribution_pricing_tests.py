@@ -60,7 +60,7 @@ def generate_bucket_probability_demo(output_file: Path) -> list[dict[str, float 
 
 
 def main() -> None:
-    output_file = ROOT / "outputs" / "bucket_probability_demo.csv"
+    output_file = ROOT / "outputs" / "demos" / "bucket_probability_demo.csv"
     rows = generate_bucket_probability_demo(output_file)
 
     assert all(isinstance(row["probability"], float) for row in rows), "Probabilities must be numeric"

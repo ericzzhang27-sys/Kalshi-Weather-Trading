@@ -1,0 +1,213 @@
+{
+  "model_name": "ngboost_normal_v0",
+  "target_name": "forecast_error",
+  "distribution_type": "Normal",
+  "created_at_utc": "2026-05-27T21:41:41.735038+00:00",
+  "split_summary": {
+    "date_column": "date",
+    "train_end_date": "2023-12-31",
+    "validation_end_date": "2024-12-31",
+    "splits": {
+      "train": {
+        "row_count": 17520,
+        "date_min": "2022-01-01",
+        "date_max": "2023-12-31"
+      },
+      "validation": {
+        "row_count": 8784,
+        "date_min": "2024-01-01",
+        "date_max": "2024-12-31"
+      },
+      "test": {
+        "row_count": 12120,
+        "date_min": "2025-01-01",
+        "date_max": "2026-05-20"
+      }
+    }
+  },
+  "train_date_range": {
+    "row_count": 17520,
+    "date_min": "2022-01-01",
+    "date_max": "2023-12-31"
+  },
+  "validation_date_range": {
+    "row_count": 8784,
+    "date_min": "2024-01-01",
+    "date_max": "2024-12-31"
+  },
+  "test_date_range": {
+    "row_count": 12120,
+    "date_min": "2025-01-01",
+    "date_max": "2026-05-20"
+  },
+  "train_row_count": 17520,
+  "validation_row_count": 8784,
+  "test_row_count": 12120,
+  "feature_count": 39,
+  "feature_columns": [
+    "forecast_high",
+    "day_of_year_sin",
+    "day_of_year_cos",
+    "hour_sin",
+    "hour_cos",
+    "month",
+    "season",
+    "forecast_horizon_hours",
+    "current_temp",
+    "dew_point",
+    "cloud_cover_now",
+    "wind_speed",
+    "precipitation_now",
+    "temp_minus_dew_point",
+    "wind_dir_sin",
+    "wind_dir_cos",
+    "max_temp_so_far",
+    "temp_change_60m",
+    "temp_change_120m",
+    "temp_change_180m",
+    "temp_change_240m",
+    "temp_change_300m",
+    "temp_acceleration_60m",
+    "temp_change_60m_minus_3h_avg_rate",
+    "forecast_temp_current_hour",
+    "current_temp_minus_forecast_temp",
+    "forecast_max_so_far",
+    "max_so_far_minus_forecast_max_so_far",
+    "current_temp_minus_max_so_far",
+    "minutes_since_max_temp_so_far",
+    "hour_of_max_temp_so_far",
+    "max_so_far_minus_forecast_high",
+    "mean_temp_error_so_far",
+    "max_temp_error_so_far",
+    "num_new_highs_last_3h",
+    "temp_range_so_far",
+    "area_under_temp_curve_so_far",
+    "near_boundary_duration_so_far",
+    "minutes_until_typical_peak"
+  ],
+  "validation_ngboost_nll": 1.3240006497536272,
+  "test_ngboost_nll": 1.6854943450897675,
+  "validation_constant_normal_baseline_nll": 2.1476575159527695,
+  "test_constant_normal_baseline_nll": 2.408487261493875,
+  "constant_normal_baseline": {
+    "mu_train": -0.8331506849315068,
+    "sigma_train": 2.1150096795353748
+  },
+  "sigma_summary": {
+    "validation": {
+      "min": 0.23345034472322887,
+      "median": 1.3321864104395869,
+      "mean": 1.0979739877480408,
+      "max": 2.5532681310689123,
+      "near_zero_share_lt_1e-4": 0.0
+    },
+    "test": {
+      "min": 0.23345034472322887,
+      "median": 1.331374946758963,
+      "mean": 1.1121998676070597,
+      "max": 2.7523704211301028,
+      "near_zero_share_lt_1e-4": 0.0
+    }
+  },
+  "notes": {
+    "preprocessing": {
+      "rows_dropped": 0,
+      "imputation_strategy": "median fit on train only",
+      "missing_and_infinite_values_by_split": {
+        "train": {
+          "missing_values": 20,
+          "infinite_values": 0,
+          "total_values_imputed_or_replaced": 20
+        },
+        "validation": {
+          "missing_values": 0,
+          "infinite_values": 0,
+          "total_values_imputed_or_replaced": 0
+        },
+        "test": {
+          "missing_values": 0,
+          "infinite_values": 0,
+          "total_values_imputed_or_replaced": 0
+        }
+      },
+      "train_imputer_medians": {
+        "forecast_high": 64.9,
+        "day_of_year_sin": 1.2246467991473532e-16,
+        "day_of_year_cos": -0.0085834810820867,
+        "hour_sin": 6.123233995736766e-17,
+        "hour_cos": -6.123233995736765e-17,
+        "month": 7.0,
+        "season": 2.0,
+        "forecast_horizon_hours": 3.5,
+        "current_temp": 54.849999999999994,
+        "dew_point": 45.5,
+        "cloud_cover_now": 72.0,
+        "wind_speed": 7.4,
+        "precipitation_now": 0.0,
+        "temp_minus_dew_point": 9.299999999999995,
+        "wind_dir_sin": -0.4226182617406992,
+        "wind_dir_cos": 0.1045284632676534,
+        "max_temp_so_far": 57.7,
+        "temp_change_60m": -0.2000000000000028,
+        "temp_change_120m": -0.4000000000000057,
+        "temp_change_180m": -0.6999999999999957,
+        "temp_change_240m": -0.8999999999999986,
+        "temp_change_300m": -1.1000000000000014,
+        "temp_acceleration_60m": -1.4210854715202004e-14,
+        "temp_change_60m_minus_3h_avg_rate": -2.4424906541753444e-15,
+        "forecast_temp_current_hour": 55.8,
+        "current_temp_minus_forecast_temp": -1.1000000000000083,
+        "forecast_max_so_far": 59.1,
+        "max_so_far_minus_forecast_max_so_far": -1.1000000000000014,
+        "current_temp_minus_max_so_far": -1.5,
+        "minutes_since_max_temp_so_far": 120.0,
+        "hour_of_max_temp_so_far": 10.0,
+        "max_so_far_minus_forecast_high": -3.6000000000000085,
+        "mean_temp_error_so_far": -1.2999999999999972,
+        "max_temp_error_so_far": -1.1000000000000014,
+        "num_new_highs_last_3h": 1.0,
+        "temp_range_so_far": 8.799999999999997,
+        "area_under_temp_curve_so_far": 543.0250000000001,
+        "near_boundary_duration_so_far": 12.5,
+        "minutes_until_typical_peak": 210.0
+      }
+    },
+    "empirical_baseline_comparability": {
+      "status": "not_directly_comparable",
+      "note": "Existing empirical baseline outputs bucket/interval log scores. Those are not directly comparable to continuous Normal density NLL.",
+      "available_columns": [
+        "date",
+        "station_id",
+        "prediction_hour",
+        "forecast_horizon_hours",
+        "is_post_peak",
+        "abs_hours_from_peak",
+        "forecast_error",
+        "true_interval",
+        "predicted_interval",
+        "prob_true_interval",
+        "nll",
+        "is_top_interval_correct",
+        "fallback_level",
+        "sample_size",
+        "normal_mu",
+        "normal_sigma",
+        "normal_predicted_interval",
+        "normal_prob_true_interval",
+        "normal_nll",
+        "normal_is_top_interval_correct",
+        "prob_error_le_-3",
+        "normal_prob_error_le_-3",
+        "prob_error_-3_to_-1",
+        "normal_prob_error_-3_to_-1",
+        "prob_error_-1_to_1",
+        "normal_prob_error_-1_to_1",
+        "prob_error_1_to_3",
+        "normal_prob_error_1_to_3",
+        "prob_error_gt_3",
+        "normal_prob_error_gt_3"
+      ]
+    },
+    "scope": "Probability-signal layer only; no trading logic or bucket conversion was run."
+  }
+}

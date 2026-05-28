@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 import warnings
+from typing import Any
 
 
 Interval = tuple[float | None, float | None]
@@ -30,6 +31,63 @@ def _clean_float_artifact(value: float) -> float:
     if math.isclose(value, rounded, rel_tol=0.0, abs_tol=1e-15):
         return float(rounded)
     return value
+
+
+def _extract_bucket_bound(bucket: Any, candidates: tuple[str, ...]) -> float | None:
+    if isinstance(bucket, dict):
+        for name in candidates:
+            if name in bucket:
+                value = bucket[name]
+                break
+        else:
+            raise ValueError(f"Bucket is missing one of these bound fields: {candidates}")
+    else:
+        for name in candidates:
+            if hasattr(bucket, name):
+                value = getattr(bucket, name)
+                break
+        else:
+            raise ValueError(f"Bucket is missing one of these bound attributes: {candidates}")
+
+    if value is None:
+        return None
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        raise ValueError(f"Bucket boundary must be finite or None, got {value!r}")
+    return numeric
+
+
+def final_bucket_to_error_bounds(
+    bucket: Any,
+    forecast_high: float,
+) -> Interval:
+    """
+    Convert final-temperature bucket bounds into forecast-error bounds.
+
+    Buckets follow the project convention lower < final_high <= upper, so the
+    converted interval is lower - forecast_high < error <= upper - forecast_high.
+    """
+    forecast = _finite_boundary(forecast_high, name="forecast_high")
+    lower_temp = _extract_bucket_bound(
+        bucket,
+        ("lower_temp", "lower_bound", "bucket_lower_temp", "lower"),
+    )
+    upper_temp = _extract_bucket_bound(
+        bucket,
+        ("upper_temp", "upper_bound", "bucket_upper_temp", "upper"),
+    )
+
+    if lower_temp is None and upper_temp is None:
+        raise ValueError("Bucket lower and upper bounds cannot both be open")
+    if lower_temp is not None and upper_temp is not None and upper_temp <= lower_temp:
+        raise ValueError(
+            f"Bucket upper boundary must exceed lower boundary: {(lower_temp, upper_temp)!r}"
+        )
+
+    lower_error = None if lower_temp is None else lower_temp - forecast
+    upper_error = None if upper_temp is None else upper_temp - forecast
+
+    return lower_error, upper_error
 
 
 def _cdf_probability_value(cdf: Callable[[float], float], boundary: float) -> float:

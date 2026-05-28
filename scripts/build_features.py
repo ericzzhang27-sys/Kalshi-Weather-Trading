@@ -15,7 +15,7 @@ from src.leakage_checks import run_leakage_checks, write_leakage_report  # noqa:
 
 
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
-OUTPUTS_DIR = REPO_ROOT / "outputs"
+OUTPUTS_DIR = REPO_ROOT / "outputs" / "day8_features"
 
 MODELING_ROWS_OUTPUT = PROCESSED_DIR / "modeling_rows_v1.csv"
 PREVIEW_OUTPUT = OUTPUTS_DIR / "modeling_rows_v1_preview.csv"
