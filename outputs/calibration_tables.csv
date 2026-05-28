@@ -1,0 +1,191 @@
+split,model,bucket_schema,bucket,bin_lower,bin_upper,count,mean_predicted_probability,empirical_frequency,calibration_gap
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.0,0.1,6714,0.019129893603327033,0.020554066130473638,-0.0014241725271466055
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.1,0.2,998,0.14217513408068375,0.09919839679358718,0.04297673728709657
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.2,0.30000000000000004,426,0.24465080599293496,0.17136150234741784,0.07328930364551711
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.30000000000000004,0.4,251,0.3382099939808262,0.46215139442231074,-0.12394140044148455
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.4,0.5,162,0.44323939274473384,0.5246913580246914,-0.08145196527995752
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.5,0.6000000000000001,109,0.5460629329418163,0.9174311926605505,-0.3713682597187342
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.6000000000000001,0.7000000000000001,49,0.6347419742238463,0.8367346938775511,-0.2019927196537048
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.7000000000000001,0.8,22,0.7564816132635993,0.8181818181818182,-0.061700204918218926
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.8,0.9,37,0.8504960823148618,0.918918918918919,-0.06842283660405712
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.9,1.0,16,0.9387667394756853,1.0,-0.06123326052431466
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.0,0.1,1573,0.017094385401832907,0.00572155117609663,0.011372834225736277
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.1,0.2,452,0.1502955432793682,0.1084070796460177,0.0418884636333505
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.2,0.30000000000000004,682,0.2526401835831614,0.28885630498533726,-0.03621612140217584
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.30000000000000004,0.4,1651,0.35935062142748825,0.3658388855239249,-0.006488264096436658
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.4,0.5,2036,0.4428698799055825,0.44351669941060906,-0.0006468195050265413
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.5,0.6000000000000001,735,0.5325637646862262,0.5836734693877551,-0.05110970470152887
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.6000000000000001,0.7000000000000001,242,0.6490927490471773,0.6446280991735537,0.004464649873623605
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.7000000000000001,0.8,203,0.7488688548425547,0.8275862068965517,-0.07871735205399699
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.8,0.9,222,0.8520235599766646,0.8603603603603603,-0.008336800383695775
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.9,1.0,988,0.9798642315288248,0.9777327935222672,0.0021314380065576843
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.0,0.1,8682,0.0016233549638960088,0.008408200875374338,-0.00678484591147833
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.1,0.2,27,0.1465635004046547,0.1111111111111111,0.03545238929354361
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.2,0.30000000000000004,13,0.2482097160152472,0.5384615384615384,-0.2902518224462912
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.30000000000000004,0.4,9,0.3344820502205466,0.8888888888888888,-0.5544068386683423
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.4,0.5,3,0.4278400759196292,1.0,-0.5721599240803708
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.5,0.6000000000000001,4,0.5897815226984219,1.0,-0.4102184773015781
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.6000000000000001,0.7000000000000001,10,0.6404899861599336,1.0,-0.3595100138400664
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.7000000000000001,0.8,17,0.7514919375056591,1.0,-0.24850806249434088
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.8,0.9,11,0.8365571691813891,1.0,-0.16344283081861088
+validation,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.9,1.0,8,0.952013518519282,1.0,-0.047986481480718046
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.0,0.1,9253,0.017233978886484994,0.05176699448827407,-0.03453301560178908
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.1,0.2,970,0.1434895649135088,0.30103092783505153,-0.15754136292154272
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.2,0.30000000000000004,643,0.24622057308066048,0.41368584758942456,-0.16746527450876408
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.30000000000000004,0.4,395,0.34636993168200936,0.5873417721518988,-0.2409718404698894
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.4,0.5,298,0.45191499275702063,0.7818791946308725,-0.3299642018738519
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.5,0.6000000000000001,214,0.5498865630170049,0.8551401869158879,-0.305253623898883
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.6000000000000001,0.7000000000000001,171,0.6471651608441963,0.9181286549707602,-0.27096349412656395
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.7000000000000001,0.8,102,0.7487082336126729,0.9803921568627451,-0.23168392325007214
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.8,0.9,52,0.8510144855381534,1.0,-0.1489855144618466
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.9,1.0,22,0.9408023752568678,1.0,-0.05919762474313217
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.0,0.1,2752,0.017297450093055035,0.004723837209302325,0.01257361288375271
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.1,0.2,650,0.15132395257939532,0.06615384615384616,0.08517010642554916
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.2,0.30000000000000004,961,0.2533908939628099,0.1383975026014568,0.11499339136135309
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.30000000000000004,0.4,1984,0.3596263478635691,0.27419354838709675,0.08543279947647237
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.4,0.5,3001,0.44533390165208875,0.33455514828390537,0.11077875336818338
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.5,0.6000000000000001,803,0.5340831067717041,0.38978829389788294,0.14429481287382118
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.6000000000000001,0.7000000000000001,355,0.6489231792727942,0.5690140845070423,0.07990909476575192
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.7000000000000001,0.8,384,0.7487564594694233,0.7369791666666666,0.011777292802756634
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.8,0.9,274,0.8503675022090202,0.7737226277372263,0.07664487447179391
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.9,1.0,956,0.9790705354033029,0.9675732217573222,0.011497313645980722
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.0,0.1,11947,0.002218935794173667,0.010295471666527162,-0.008076535872353494
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.1,0.2,41,0.14407300922147318,0.1951219512195122,-0.05104894199803903
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.2,0.30000000000000004,28,0.26312143213689404,0.35714285714285715,-0.09402142500596311
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.30000000000000004,0.4,20,0.3336665083704803,0.75,-0.4163334916295197
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.4,0.5,4,0.43299561283751725,1.0,-0.5670043871624828
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.5,0.6000000000000001,2,0.5797512614810667,1.0,-0.4202487385189333
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.6000000000000001,0.7000000000000001,28,0.6679029554536405,1.0,-0.33209704454635947
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.7000000000000001,0.8,22,0.7613468863424576,1.0,-0.23865311365754238
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.8,0.9,14,0.824550475045109,1.0,-0.17544952495489097
+test,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.9,1.0,14,0.9181972284749625,1.0,-0.08180277152503745
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.0,0.1,15967,0.01803119636058016,0.038642199536544124,-0.020611003175963965
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.1,0.2,1968,0.14282299887125305,0.19867886178861788,-0.05585586291736483
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.2,0.30000000000000004,1069,0.24559501575664638,0.31711880261927033,-0.07152378686262395
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.30000000000000004,0.4,646,0.343199429572107,0.5386996904024768,-0.1955002608303698
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.4,0.5,460,0.44885967275269356,0.691304347826087,-0.2424446750733934
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.5,0.6000000000000001,323,0.5485962358399289,0.8761609907120743,-0.3275647548721454
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.6000000000000001,0.7000000000000001,220,0.6443981783696637,0.9,-0.2556018216303363
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.7000000000000001,0.8,124,0.7500873816152566,0.9516129032258065,-0.20152552161054993
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.8,0.9,89,0.8507989695913917,0.9662921348314607,-0.11549316524006903
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_0,0.9,1.0,38,0.9399452654542645,1.0,-0.06005473454573551
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.0,0.1,4325,0.01722359558223598,0.005086705202312139,0.01213689037992384
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.1,0.2,1102,0.15090213678664371,0.08348457350272233,0.06741756328392139
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.2,0.30000000000000004,1643,0.25307927833352184,0.20085209981740718,0.052227178516114664
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.30000000000000004,0.4,3635,0.3595011142058059,0.315818431911967,0.04368268229383887
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.4,0.5,5037,0.4443379222445274,0.37859837204685326,0.06573955019767413
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.5,0.6000000000000001,1538,0.5333570232653151,0.48244473342002603,0.05091228984528906
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.6000000000000001,0.7000000000000001,597,0.6489919160992611,0.5996649916247906,0.04932692447447051
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.7000000000000001,0.8,587,0.7487953287381552,0.768313458262351,-0.019518129524195738
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.8,0.9,496,0.8511087216130868,0.8125,0.038608721613086816
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_2,0.9,1.0,1944,0.9794739159444632,0.9727366255144033,0.0067372904300598835
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.0,0.1,20629,0.001968277363398029,0.009501187648456057,-0.007532910285058028
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.1,0.2,68,0.1450618807206776,0.16176470588235295,-0.016702825161675344
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.2,0.30000000000000004,41,0.25839332702515233,0.4146341463414634,-0.15624081931631106
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.30000000000000004,0.4,29,0.33391960756532846,0.7931034482758621,-0.45918384071053364
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.4,0.5,7,0.4307860970155652,1.0,-0.5692139029844347
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.5,0.6000000000000001,6,0.5864381022926368,1.0,-0.4135618977073632
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.6000000000000001,0.7000000000000001,38,0.660689016165823,1.0,-0.339310983834177
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.7000000000000001,0.8,39,0.7570511394135967,1.0,-0.2429488605864033
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.8,0.9,25,0.8298334204650724,1.0,-0.17016657953492764
+combined_out_of_sample,ngboost_normal_v0,kalshi_around_forecast_bucket_index,market_bucket_5,0.9,1.0,22,0.9304940612183514,1.0,-0.06950593878164857
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-inf, -3]",0.0,0.1,8339,0.02096736375976886,0.053243794219930446,-0.032276430460161584
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-inf, -3]",0.1,0.2,1231,0.14446099358329983,0.2696994313566206,-0.12523843777332078
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-inf, -3]",0.2,0.30000000000000004,644,0.24444339913896396,0.4549689440993789,-0.21052554496041492
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-inf, -3]",0.30000000000000004,0.4,491,0.34757226746061076,0.5132382892057027,-0.16566602174509193
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-inf, -3]",0.4,0.5,307,0.4394280023780941,0.7068403908794788,-0.2674123885013847
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-inf, -3]",0.5,0.6000000000000001,266,0.5462835390147986,0.7894736842105263,-0.24319014519572768
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-inf, -3]",0.6000000000000001,0.7000000000000001,262,0.6523086842171247,0.8625954198473282,-0.2102867356302035
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-inf, -3]",0.7000000000000001,0.8,263,0.7512319770698921,0.9695817490494296,-0.21834977197953753
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-inf, -3]",0.8,0.9,212,0.8494686208483999,0.9905660377358491,-0.14109741688744915
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-inf, -3]",0.9,1.0,105,0.9327160934707543,1.0,-0.06728390652924565
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-3, -1]",0.0,0.1,2595,0.014449884575665302,0.009248554913294798,0.005201329662370503
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-3, -1]",0.1,0.2,1406,0.16035389849618145,0.23541963015647227,-0.07506573166029082
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-3, -1]",0.2,0.30000000000000004,2226,0.2459743675828749,0.33423180592991913,-0.08825743834704425
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-3, -1]",0.30000000000000004,0.4,1985,0.3533974166363317,0.33904282115869017,0.014354595477641507
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-3, -1]",0.4,0.5,1862,0.4464602822341925,0.3576799140708915,0.08878036816330098
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-3, -1]",0.5,0.6000000000000001,586,0.5363017221381413,0.43856655290102387,0.09773516923711745
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-3, -1]",0.6000000000000001,0.7000000000000001,216,0.6456938899392232,0.6018518518518519,0.043842038087371304
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-3, -1]",0.7000000000000001,0.8,182,0.7487131289272085,0.8351648351648352,-0.08645170623762666
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-3, -1]",0.8,0.9,220,0.8536648316038069,0.7772727272727272,0.07639210433107968
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-3, -1]",0.9,1.0,842,0.976162367114696,0.9928741092636579,-0.016711742148961983
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-1, 1]",0.0,0.1,3106,0.01782637864315493,0.01159047005795235,0.006235908585202579
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-1, 1]",0.1,0.2,881,0.14796896402051485,0.11577752553916004,0.032191438481354806
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-1, 1]",0.2,0.30000000000000004,940,0.2528976981774023,0.17659574468085107,0.07630195349655125
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-1, 1]",0.30000000000000004,0.4,1855,0.35962819068538093,0.2722371967654987,0.08739099391988225
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-1, 1]",0.4,0.5,2766,0.4454024641068764,0.28524945770065074,0.16015300640622565
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-1, 1]",0.5,0.6000000000000001,904,0.5359126656896058,0.3141592920353982,0.2217533736542076
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-1, 1]",0.6000000000000001,0.7000000000000001,406,0.6438858184149362,0.5443349753694581,0.09955084304547812
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-1, 1]",0.7000000000000001,0.8,242,0.7524455252468265,0.6942148760330579,0.05823064921376864
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-1, 1]",0.8,0.9,245,0.8504508124610741,0.7836734693877551,0.06677734307331906
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(-1, 1]",0.9,1.0,775,0.9786565988007142,0.9716129032258064,0.0070436955749078045
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(1, 3]",0.0,0.1,6727,0.018849352466781953,0.027055150884495317,-0.008205798417713364
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(1, 3]",0.1,0.2,1710,0.147309932617698,0.11754385964912281,0.029766072968575197
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(1, 3]",0.2,0.30000000000000004,1896,0.2474902616513391,0.2178270042194093,0.029663257431929824
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(1, 3]",0.30000000000000004,0.4,677,0.33755070430322653,0.26440177252584934,0.07314893177737719
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(1, 3]",0.4,0.5,201,0.4476594813524067,0.3482587064676617,0.09940077488474497
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(1, 3]",0.5,0.6000000000000001,143,0.5491067800595242,0.5314685314685315,0.017638248590992722
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(1, 3]",0.6000000000000001,0.7000000000000001,139,0.6486730237381808,0.6690647482014388,-0.020391724463257987
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(1, 3]",0.7000000000000001,0.8,95,0.7525869291744096,0.8315789473684211,-0.07899201819401147
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(1, 3]",0.8,0.9,118,0.857681868438148,0.7966101694915254,0.061071698946622566
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(1, 3]",0.9,1.0,414,0.9805984815896225,0.9975845410628019,-0.016986059473179438
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(3, inf)",0.0,0.1,11390,0.011412961092490088,0.020632133450395083,-0.009219172357904995
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(3, inf)",0.1,0.2,361,0.13559765814720964,0.1745152354570637,-0.03891757730985407
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(3, inf)",0.2,0.30000000000000004,39,0.24297349384602077,0.20512820512820512,0.037845288717815645
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(3, inf)",0.30000000000000004,0.4,42,0.3538026262464687,0.23809523809523808,0.1157073881512306
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(3, inf)",0.4,0.5,25,0.4487319645527777,0.44,0.008731964552777693
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(3, inf)",0.5,0.6000000000000001,31,0.5603714516229771,0.8064516129032258,-0.24608016128024868
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(3, inf)",0.6000000000000001,0.7000000000000001,21,0.6612617626689085,0.7142857142857143,-0.05302395161680584
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(3, inf)",0.7000000000000001,0.8,33,0.7539690517249368,0.9696969696969697,-0.21572791797203295
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(3, inf)",0.8,0.9,46,0.8546093126885159,0.9782608695652174,-0.12365155687670148
+test,ngboost_normal_v0,day9_forecast_error_intervals,"(3, inf)",0.9,1.0,132,0.9726841654145456,1.0,-0.02731583458545439
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-inf, -3]",0.0,0.1,1680,0.08708930128284961,0.11428571428571428,-0.02719641300286467
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-inf, -3]",0.1,0.2,5688,0.14100441805627592,0.18565400843881857,-0.04464959038254265
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-inf, -3]",0.2,0.30000000000000004,4752,0.23898942931200992,0.2727272727272727,-0.033737843415262786
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-inf, -3]",0.30000000000000004,0.4,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-inf, -3]",0.4,0.5,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-inf, -3]",0.5,0.6000000000000001,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-inf, -3]",0.6000000000000001,0.7000000000000001,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-inf, -3]",0.7000000000000001,0.8,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-inf, -3]",0.8,0.9,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-inf, -3]",0.9,1.0,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-3, -1]",0.0,0.1,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-3, -1]",0.1,0.2,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-3, -1]",0.2,0.30000000000000004,3216,0.2577281422009394,0.417910447761194,-0.1601823055602546
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-3, -1]",0.30000000000000004,0.4,8808,0.336860284737581,0.2970027247956403,0.03985755994194068
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-3, -1]",0.4,0.5,96,0.40270270270270275,0.25,0.15270270270270275
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-3, -1]",0.5,0.6000000000000001,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-3, -1]",0.6000000000000001,0.7000000000000001,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-3, -1]",0.7000000000000001,0.8,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-3, -1]",0.8,0.9,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-3, -1]",0.9,1.0,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-1, 1]",0.0,0.1,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-1, 1]",0.1,0.2,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-1, 1]",0.2,0.30000000000000004,2832,0.2570316078790655,0.3389830508474576,-0.08195144296839213
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-1, 1]",0.30000000000000004,0.4,6648,0.34457932953332976,0.27075812274368233,0.07382120678964743
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-1, 1]",0.4,0.5,2640,0.43866053737021476,0.17272727272727273,0.26593326464294204
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-1, 1]",0.5,0.6000000000000001,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-1, 1]",0.6000000000000001,0.7000000000000001,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-1, 1]",0.7000000000000001,0.8,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-1, 1]",0.8,0.9,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(-1, 1]",0.9,1.0,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(1, 3]",0.0,0.1,3816,0.09096302632516871,0.07547169811320754,0.01549132821196117
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(1, 3]",0.1,0.2,7608,0.12535421347876824,0.1640378548895899,-0.03868364141082167
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(1, 3]",0.2,0.30000000000000004,696,0.21062441752096922,0.3793103448275862,-0.16868592730661697
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(1, 3]",0.30000000000000004,0.4,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(1, 3]",0.4,0.5,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(1, 3]",0.5,0.6000000000000001,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(1, 3]",0.6000000000000001,0.7000000000000001,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(1, 3]",0.7000000000000001,0.8,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(1, 3]",0.8,0.9,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(1, 3]",0.9,1.0,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(3, inf)",0.0,0.1,12120,0.04762833737602174,0.047524752475247525,0.00010358490077421595
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(3, inf)",0.1,0.2,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(3, inf)",0.2,0.30000000000000004,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(3, inf)",0.30000000000000004,0.4,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(3, inf)",0.4,0.5,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(3, inf)",0.5,0.6000000000000001,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(3, inf)",0.6000000000000001,0.7000000000000001,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(3, inf)",0.7000000000000001,0.8,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(3, inf)",0.8,0.9,0,,,
+test,empirical_baseline_day9,day9_forecast_error_intervals,"(3, inf)",0.9,1.0,0,,,
