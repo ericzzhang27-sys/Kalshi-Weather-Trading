@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 
 try:
-    from .distributional_model import predict_distribution_params as _predict_param_arrays
+    from .distributional_model import predict_distribution_details
 except ImportError:
-    from distributional_model import predict_distribution_params as _predict_param_arrays
+    from distributional_model import predict_distribution_details
 
 
 METADATA_COLUMNS = [
@@ -25,6 +25,8 @@ METADATA_COLUMNS = [
     "official_high",
     "forecast_error",
     "model_version",
+    "distribution_type",
+    "df",
     "forecast_horizon_hours",
     "split",
 ]
@@ -36,13 +38,15 @@ def predict_distribution_params(
     metadata: pd.DataFrame | dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     """
-    Return one standardized Normal distribution-parameter row per prediction state.
+    Return one standardized distribution-parameter row per prediction state.
 
     The project-level model helper in distributional_model intentionally returns
-    raw arrays for training/evaluation code. This wrapper is the CSV/export
-    shape used by downstream bucket pricing.
+    raw arrays and distribution metadata for training/evaluation code. This
+    wrapper is the CSV/export shape used by downstream bucket pricing.
     """
-    mu, sigma = _predict_param_arrays(model, X)
+    details = predict_distribution_details(model, X)
+    mu = details["mu"]
+    sigma = details["sigma"]
     mu_array = np.asarray(mu, dtype=float)
     sigma_array = np.asarray(sigma, dtype=float)
     if not np.isfinite(mu_array).all():
@@ -68,6 +72,9 @@ def predict_distribution_params(
         result.insert(0, "row_id", np.arange(len(result), dtype=int))
     result["mu"] = mu_array
     result["sigma"] = sigma_array
+    result["distribution_type"] = str(details["distribution_type"])
+    if details["df"] is not None:
+        result["df"] = np.asarray(details["df"], dtype=float)
 
     ordered = [column for column in METADATA_COLUMNS if column in result.columns]
     remaining = [column for column in result.columns if column not in ordered]

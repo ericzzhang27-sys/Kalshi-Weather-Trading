@@ -12,7 +12,6 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.stats import norm as scipy_norm
 
 try:
     from .bucket_schema import (
@@ -28,6 +27,7 @@ try:
         normalize_probabilities,
     )
     from .error_boundaries import convert_nws_to_boundaries
+    from .distributional_model import distribution_cdf, normalize_distribution_name
 except ImportError:
     from bucket_schema import (
         Bucket,
@@ -42,6 +42,7 @@ except ImportError:
         normalize_probabilities,
     )
     from error_boundaries import convert_nws_to_boundaries
+    from distributional_model import distribution_cdf, normalize_distribution_name
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +91,8 @@ BUCKET_OUTPUT_COLUMNS = [
     "error_upper",
     "mu",
     "sigma",
+    "distribution_type",
+    "df",
     "probability",
 ]
 
@@ -142,10 +145,7 @@ def _validate_distribution_params(mu: float, sigma: float) -> tuple[float, float
 
 
 def _validate_dist_type(dist_type: str) -> str:
-    normalized = str(dist_type).strip().lower()
-    if normalized in {"normal", "gaussian"}:
-        return "normal"
-    raise ValueError(f"Unsupported dist_type={dist_type!r}; only 'normal' is supported")
+    return normalize_distribution_name(dist_type)
 
 
 def forecast_high_to_market_anchor(
@@ -233,6 +233,7 @@ def cdf_from_params(
     mu: float,
     sigma: float,
     dist_type: str = "normal",
+    df: float | None = None,
 ) -> float:
     """
     Evaluate a forecast-error CDF from distribution parameters.
@@ -254,10 +255,15 @@ def cdf_from_params(
     if x_value == math.inf:
         return 1.0
 
-    if dist == "normal":
-        value = float(scipy_norm.cdf(x_value, loc=mu_value, scale=sigma_value))
-    else:
-        raise AssertionError(f"Unhandled dist_type after validation: {dist}")
+    value = float(
+        distribution_cdf(
+            x_value,
+            mu=mu_value,
+            sigma=sigma_value,
+            distribution=dist,
+            df=df,
+        )[0]
+    )
 
     if not math.isfinite(value):
         raise ValueError(f"CDF returned non-finite value at {x_value!r}: {value!r}")
@@ -272,6 +278,7 @@ def interval_probability_from_cdf(
     mu: float,
     sigma: float,
     dist_type: str = "normal",
+    df: float | None = None,
 ) -> float:
     """
     Compute P(lower < error <= upper) as F(upper) - F(lower).
@@ -293,12 +300,12 @@ def interval_probability_from_cdf(
     lower_cdf = (
         0.0
         if lower_value is None or _is_negative_infinity(lower_value)
-        else cdf_from_params(lower_value, mu=mu, sigma=sigma, dist_type=dist_type)
+        else cdf_from_params(lower_value, mu=mu, sigma=sigma, dist_type=dist_type, df=df)
     )
     upper_cdf = (
         1.0
         if upper_value is None or _is_positive_infinity(upper_value)
-        else cdf_from_params(upper_value, mu=mu, sigma=sigma, dist_type=dist_type)
+        else cdf_from_params(upper_value, mu=mu, sigma=sigma, dist_type=dist_type, df=df)
     )
     return _clean_probability(upper_cdf - lower_cdf)
 
@@ -522,6 +529,8 @@ def price_buckets_for_row(
 
     forecast_high = _validate_forecast_high(row_values["forecast_high"])
     mu, sigma = _validate_distribution_params(row_values["mu"], row_values["sigma"])
+    dist = _validate_dist_type(dist_type)
+    df_value = _row_degrees_of_freedom(row_values, dist)
     if buckets is None:
         buckets = make_kalshi_buckets_around_forecast(
             forecast_high=forecast_high,
@@ -541,7 +550,8 @@ def price_buckets_for_row(
             error_upper,
             mu=mu,
             sigma=sigma,
-            dist_type=dist_type,
+            dist_type=dist,
+            df=df_value,
         )
         record = {
             **metadata,
@@ -553,6 +563,8 @@ def price_buckets_for_row(
             "error_upper": error_upper,
             "mu": mu,
             "sigma": sigma,
+            "distribution_type": dist,
+            "df": df_value,
             "probability": probability,
         }
         records.append(record)
@@ -560,7 +572,10 @@ def price_buckets_for_row(
     return records
 
 
-def _validate_prediction_params_frame(pred_df: pd.DataFrame) -> pd.DataFrame:
+def _validate_prediction_params_frame(
+    pred_df: pd.DataFrame,
+    dist_type: str = "normal",
+) -> pd.DataFrame:
     required_columns = ["forecast_high", "mu", "sigma"]
     missing = [column for column in required_columns if column not in pred_df.columns]
     if missing:
@@ -580,6 +595,13 @@ def _validate_prediction_params_frame(pred_df: pd.DataFrame) -> pd.DataFrame:
     sigma = working["sigma"].to_numpy(dtype=float)
     if not np.isfinite(sigma).all() or (sigma <= 0.0).any():
         raise ValueError("sigma must be finite and greater than 0 for every prediction row")
+    if normalize_distribution_name(dist_type) == "student_t":
+        if "df" not in working.columns:
+            raise ValueError("Student-t bucket pricing requires a df column")
+        working["df"] = pd.to_numeric(working["df"], errors="coerce")
+        df_values = working["df"].to_numpy(dtype=float)
+        if not np.isfinite(df_values).all() or (df_values <= 0.0).any():
+            raise ValueError("df must be finite and greater than 0 for Student-t pricing")
 
     for column in ("actual_high", "official_high", "forecast_error", "forecast_horizon_hours", "nll"):
         if column in working.columns:
@@ -588,25 +610,35 @@ def _validate_prediction_params_frame(pred_df: pd.DataFrame) -> pd.DataFrame:
     return working
 
 
+def _row_degrees_of_freedom(row_values: dict[str, Any], dist_type: str) -> float | None:
+    if dist_type != "student_t":
+        return None
+    if "df" not in row_values:
+        raise ValueError("Student-t row pricing requires df")
+    value = float(row_values["df"])
+    if not math.isfinite(value) or value <= 0.0:
+        raise ValueError(f"df must be finite and greater than 0, got {row_values['df']!r}")
+    return value
+
+
 def _probabilities_for_bucket_arrays(
     lower_error: np.ndarray | None,
     upper_error: np.ndarray | None,
     mu: np.ndarray,
     sigma: np.ndarray,
     dist_type: str,
+    df: np.ndarray | None = None,
 ) -> np.ndarray:
     dist = _validate_dist_type(dist_type)
-    if dist != "normal":
-        raise AssertionError(f"Unhandled dist_type after validation: {dist}")
     lower_cdf = (
         np.zeros_like(mu, dtype=float)
         if lower_error is None
-        else scipy_norm.cdf(lower_error, loc=mu, scale=sigma)
+        else distribution_cdf(lower_error, mu=mu, sigma=sigma, distribution=dist, df=df)
     )
     upper_cdf = (
         np.ones_like(mu, dtype=float)
         if upper_error is None
-        else scipy_norm.cdf(upper_error, loc=mu, scale=sigma)
+        else distribution_cdf(upper_error, mu=mu, sigma=sigma, distribution=dist, df=df)
     )
     probabilities = np.asarray(upper_cdf - lower_cdf, dtype=float)
     if not np.isfinite(probabilities).all():
@@ -634,7 +666,8 @@ def price_buckets_for_dataframe(
 
     Returns a long-format DataFrame with one row per prediction row per bucket.
     """
-    working = _validate_prediction_params_frame(pred_df)
+    dist = _validate_dist_type(dist_type)
+    working = _validate_prediction_params_frame(pred_df, dist_type=dist)
     if buckets is None:
         records: list[dict[str, Any]] = []
         for _, row in working.iterrows():
@@ -642,7 +675,7 @@ def price_buckets_for_dataframe(
                 price_buckets_for_row(
                     row,
                     buckets=None,
-                    dist_type=dist_type,
+                    dist_type=dist,
                     forecast_rounding=forecast_rounding,
                 )
             )
@@ -659,6 +692,7 @@ def price_buckets_for_dataframe(
     forecast_high = working["forecast_high"].to_numpy(dtype=float)
     mu = working["mu"].to_numpy(dtype=float)
     sigma = working["sigma"].to_numpy(dtype=float)
+    df_values = working["df"].to_numpy(dtype=float) if dist == "student_t" else None
     metadata_columns = [
         column for column in PREDICTION_METADATA_COLUMNS if column in working.columns
     ]
@@ -674,7 +708,8 @@ def price_buckets_for_dataframe(
             upper_error=upper_error,
             mu=mu,
             sigma=sigma,
-            dist_type=dist_type,
+            dist_type=dist,
+            df=df_values,
         )
 
         frame = working[base_columns].copy()
@@ -686,6 +721,8 @@ def price_buckets_for_dataframe(
         frame["error_upper"] = np.nan if upper_error is None else upper_error
         frame["mu"] = mu
         frame["sigma"] = sigma
+        frame["distribution_type"] = dist
+        frame["df"] = df_values if df_values is not None else np.nan
         frame["probability"] = probabilities
         frames.append(frame)
 
@@ -783,7 +820,11 @@ def validate_bucket_probabilities(
     }
 
 
-def load_prediction_params(path: str | Path, splits: list[str] | None = None) -> pd.DataFrame:
+def load_prediction_params(
+    path: str | Path,
+    splits: list[str] | None = None,
+    dist_type: str = "normal",
+) -> pd.DataFrame:
     params_path = Path(path)
     if not params_path.exists():
         raise FileNotFoundError(f"NGBoost distribution parameter file not found: {params_path}")
@@ -794,7 +835,7 @@ def load_prediction_params(path: str | Path, splits: list[str] | None = None) ->
         if "split" not in df.columns:
             raise ValueError("Cannot filter by split because the prediction file has no split column")
         df = df[df["split"].isin(splits)].copy()
-    return _validate_prediction_params_frame(df)
+    return _validate_prediction_params_frame(df, dist_type=dist_type)
 
 
 def _csv_bound_value(value: Any) -> float | None:
@@ -924,10 +965,13 @@ def _format_error_interval(lower: Any, upper: Any) -> str:
 def _manual_cdf_expression(row: pd.Series) -> str:
     mu = float(row["mu"])
     sigma = float(row["sigma"])
+    dist = str(row.get("distribution_type", "normal"))
+    dist_label = normalize_distribution_name(dist)
+    cdf_label = "StudentTCDF" if dist_label == "student_t" else f"{dist_label.title()}CDF"
     lower = row.get("error_lower")
     upper = row.get("error_upper")
-    upper_text = "1" if pd.isna(upper) else f"NormalCDF(({float(upper):.6g} - {mu:.6g}) / {sigma:.6g})"
-    lower_text = "0" if pd.isna(lower) else f"NormalCDF(({float(lower):.6g} - {mu:.6g}) / {sigma:.6g})"
+    upper_text = "1" if pd.isna(upper) else f"{cdf_label}(({float(upper):.6g} - {mu:.6g}) / {sigma:.6g})"
+    lower_text = "0" if pd.isna(lower) else f"{cdf_label}(({float(lower):.6g} - {mu:.6g}) / {sigma:.6g})"
     return f"{upper_text} - {lower_text}"
 
 
@@ -963,6 +1007,11 @@ def build_manual_cdf_examples(
         forecast_high = float(row["forecast_high"])
         mu = float(row["mu"])
         sigma = float(row["sigma"])
+        dist = normalize_distribution_name(str(row.get("distribution_type", "normal")))
+        df_value = row.get("df")
+        df_text = ""
+        if dist == "student_t" and df_value is not None and not pd.isna(df_value):
+            df_text = f", df={float(df_value):.6g}"
         probability = float(row["probability"])
         lower_temp = row.get("bucket_lower_temp")
         upper_temp = row.get("bucket_upper_temp")
@@ -972,7 +1021,7 @@ def build_manual_cdf_examples(
             "\n".join(
                 [
                     f"forecast_high = {forecast_high:.6g}",
-                    f"error | X_t ~ Normal(mu={mu:.6g}, sigma={sigma:.6g})",
+                    f"error | X_t ~ {dist}(mu={mu:.6g}, scale={sigma:.6g}{df_text})",
                     "",
                     "Final bucket:",
                     _format_bucket_interval(lower_temp, upper_temp),
@@ -1082,7 +1131,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    pred_df = load_prediction_params(args.params_path, splits=args.splits)
+    pred_df = load_prediction_params(args.params_path, splits=args.splits, dist_type=args.dist_type)
     if args.bucket_schema_path:
         buckets = load_bucket_schema(args.bucket_schema_path)
         bucket_mode = f"fixed_schema:{args.bucket_schema_path}"

@@ -14,13 +14,13 @@ The model learns when the NWS forecast is likely to be too high or too low, cond
 
 Because weather markets settle into mutually exclusive buckets, the model must output a full probability distribution across all possible buckets. The probabilities must be coherent, nonnegative, and sum to 1.
 
-The primary modeling approach is a CDF-based gradient boosting model / cumulative classification model. For each important forecast-error boundary c, the model estimates:
+Current Day 14 direction: the final project is NGBoost/DGBM-focused. The primary model estimates a full distribution for forecast_error, and bucket probabilities come from the model-implied CDF:
 
 F(c | X_t) = P(error <= c | X_t)
 
-Then bucket probabilities are computed by subtracting CDF values:
-
 P(a < error <= b | X_t) = F(b | X_t) - F(a | X_t)
+
+The required comparison remains the empirical historical forecast-error distribution. CDF classifiers, multiclass bucket models, quantile models, and alternative DGBM implementations are optional future extensions only. Probability quality, calibration, and interval coverage matter more than point accuracy.
 
 The goal of the project is to build a calibrated probability signal first. Trading, paper-trading, position sizing, and execution logic come later.
 
@@ -74,58 +74,31 @@ This rule applies to weather observations, forecast updates, market prices, real
 
 ---
 
-## 4. CDF-Based Model Logic
+## 4. NGBoost / DGBM Distribution Logic
 
-The model estimates the conditional cumulative distribution function of forecast error.
+The primary model estimates the conditional distribution of forecast error directly:
 
-For each boundary c, create a binary classification target:
+error_t | X_t ~ DGBM distribution
 
-target_c = 1 if error_t <= c, else 0
+Current implementation:
 
-Then train a binary classifier to estimate:
+- model family: NGBoost / DGBM
+- target: forecast_error
+- current distribution: Normal
+- score: log score / negative log likelihood
+- output parameters: distribution location and scale
+
+For any forecast-error boundary c, the fitted distribution gives:
 
 F(c | X_t) = P(error_t <= c | X_t)
 
-Where:
+Bucket probabilities are then computed by differencing CDF values:
 
-- X_t is the feature vector available at timestamp t.
-- c is a forecast-error boundary.
-- F(c | X_t) is the predicted cumulative probability that forecast error is less than or equal to c.
+P(a < error_t <= b | X_t) = F(b | X_t) - F(a | X_t)
 
-Example boundaries might be:
+The exact bucket boundaries should be chosen based on the market settlement rules and the empirical distribution of forecast errors.
 
-- c = -5
-- c = -4
-- c = -3
-- c = -2
-- c = -1
-- c = 0
-- c = 1
-- c = 2
-- c = 3
-- c = 4
-- c = 5
-
-The exact boundaries should be chosen based on the bucket structure of the markets being traded and the empirical distribution of forecast errors.
-
-The model may use gradient boosting classifiers such as LightGBM, XGBoost, CatBoost, or sklearn HistGradientBoostingClassifier.
-
-The key requirement is that the final output must behave like a CDF:
-
-If c1 < c2, then:
-
-F(c1 | X_t) <= F(c2 | X_t)
-
-If raw classifier outputs violate this monotonicity, post-processing may be required.
-
-Possible post-processing:
-
-- Sort boundaries from low to high.
-- Apply cumulative maximum to force nondecreasing CDF values.
-- Clip values to the interval [0, 1].
-- Recompute bucket probabilities after monotonicity correction.
-
-This is only a practical patch. Later, a more rigorous approach may use isotonic calibration, ordinal regression, or a model architecture that enforces monotonicity directly.
+Optional future extensions may include a CDF classifier, multiclass bucket model, quantile model, or alternative DGBM implementation, but they are not required benchmark branches for the current project.
 
 ---
 
@@ -418,21 +391,28 @@ The evaluation design must simulate the actual historical information flow.
 
 ## 11. Model Scope
 
-The first model should be simple enough to debug.
+The model hierarchy is frozen for the current project phase.
 
-Initial model type:
+Primary model:
 
-CDF-based GBM / cumulative classification model
+- NGBoost / DGBM on forecast_error
 
-Initial target:
+Required baseline:
 
-NWS forecast error for official high temperature
+- empirical historical forecast-error distribution
 
-Initial prediction output:
+Prediction output:
 
-Full probability distribution across market buckets
+- full probability distribution across market buckets, derived from the model-implied CDF
 
-Not included in the first model:
+Optional future extensions only:
+
+- CDF classifier
+- multiclass bucket model
+- quantile model
+- alternative DGBM implementations
+
+Not included in the current probability-model milestone:
 
 - live trading
 - automatic order execution
@@ -443,7 +423,7 @@ Not included in the first model:
 - reinforcement learning
 - direct profitability claims
 
-Those should only be added after the probability signal is proven coherent and reasonably calibrated.
+Those should only be added after the NGBoost probability signal is proven coherent and reasonably calibrated against the empirical baseline.
 
 ---
 
@@ -475,7 +455,7 @@ and
 
 P(a < error <= b)
 
-Therefore, the primary model should estimate the CDF directly.
+Therefore, the primary NGBoost model must expose a coherent CDF for bucket pricing.
 
 Quantile regression may still be useful later as a secondary diagnostic, but it should not be the main architecture for bucket pricing.
 
@@ -497,9 +477,9 @@ Problems:
 - tail risk may be mishandled
 - the model does not naturally learn an ordered temperature distribution
 
-The CDF approach is better because temperature buckets are ordered.
+The NGBoost distribution approach is better for the current project because temperature buckets are ordered and bucket probabilities can be derived from one coherent forecast-error CDF.
 
-By modeling cumulative probabilities and differencing them, the model respects the ordered structure of the outcome.
+By modeling the forecast-error distribution and differencing CDF values, the model respects the ordered structure of the outcome.
 
 ---
 
@@ -509,17 +489,15 @@ Day 1 is complete when the project spec clearly answers these questions:
 
 1. What is the model predicting?
 
-The conditional CDF of NWS forecast error.
+The conditional distribution of NWS forecast error, exposed through a model-implied CDF.
 
 2. What is the target?
 
 error = actual official high - NWS predicted high at timestamp t
 
-3. How are classifier targets created?
+3. How are model probabilities created?
 
-For each boundary c:
-
-target_c = 1 if error <= c, else 0
+NGBoost/DGBM is trained on forecast_error with log score. The fitted distribution supplies CDF values at any boundary c.
 
 4. How are bucket probabilities computed?
 
@@ -579,9 +557,9 @@ The market contains mutually exclusive buckets. The model needs a full probabili
 
 If the market has upper and lower tail buckets, they must be included. Otherwise probabilities will not sum to 1.
 
-### Pitfall 4: Trusting classifier outputs without calibration
+### Pitfall 4: Trusting model probabilities without calibration
 
-GBM probabilities are often miscalibrated. Calibration must be tested directly.
+Distributional model probabilities can be miscalibrated. Calibration must be tested directly.
 
 ### Pitfall 5: Using random splits
 
@@ -599,9 +577,9 @@ A good probability model is not automatically a profitable trading strategy. Pro
 
 ## 17. Final Project Definition
 
-This project builds a timestamp-correct, CDF-based machine-learning model for weather bucket markets.
+This project builds a timestamp-correct NGBoost/DGBM probability model for weather bucket markets.
 
-The model estimates the conditional distribution of NWS forecast error using only information available at prediction time. It converts temperature market buckets into forecast-error intervals, computes coherent fair probabilities by differencing CDF values, validates calibration and leakage, and only later compares fair probabilities to market prices for possible trading edges.
+The model estimates the conditional distribution of NWS forecast error using only information available at prediction time. It converts temperature market buckets into forecast-error intervals, computes coherent fair probabilities from the model-implied CDF, validates calibration and leakage, compares against the empirical baseline, and only later compares fair probabilities to market prices for possible trading edges.
 
 The first milestone is not to make money.
 

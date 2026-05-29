@@ -5,6 +5,7 @@ from math import isclose
 import pandas as pd
 import pytest
 from scipy.stats import norm
+from scipy.stats import t as student_t
 
 from src.bucket_schema import TemperatureBucket, make_integer_temperature_buckets
 from src.distribution_pricing import (
@@ -25,6 +26,31 @@ def test_normal_cdf_interval_probability_matches_scipy() -> None:
 
     probability = interval_probability_from_cdf(lower, upper, mu=mu, sigma=sigma)
     expected = norm.cdf(upper, loc=mu, scale=sigma) - norm.cdf(lower, loc=mu, scale=sigma)
+
+    assert isclose(probability, expected, rel_tol=0.0, abs_tol=1e-12)
+
+
+def test_student_t_cdf_interval_probability_matches_scipy() -> None:
+    lower = -1.25
+    upper = 2.5
+    mu = 0.4
+    sigma = 1.7
+    df = 4.0
+
+    probability = interval_probability_from_cdf(
+        lower,
+        upper,
+        mu=mu,
+        sigma=sigma,
+        dist_type="student_t",
+        df=df,
+    )
+    expected = student_t.cdf(upper, df=df, loc=mu, scale=sigma) - student_t.cdf(
+        lower,
+        df=df,
+        loc=mu,
+        scale=sigma,
+    )
 
     assert isclose(probability, expected, rel_tol=0.0, abs_tol=1e-12)
 

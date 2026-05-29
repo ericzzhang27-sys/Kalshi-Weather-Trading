@@ -5,7 +5,14 @@ from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
+
+from src.distributional_model import (
+    distribution_cdf,
+    distribution_logpdf,
+    distribution_ppf,
+    distribution_std,
+    normalize_distribution_name,
+)
 
 
 _DEFAULT_PROBABILITY_ATOL = 1e-6
@@ -15,6 +22,8 @@ def validate_distribution_params(
     df: pd.DataFrame,
     mu_col: str = "mu",
     sigma_col: str = "sigma",
+    dist_type: str = "normal",
+    df_col: str = "df",
 ) -> None:
     if not isinstance(df, pd.DataFrame):
         raise TypeError("df must be a pandas DataFrame")
@@ -39,19 +48,36 @@ def validate_distribution_params(
     if (sigma_values <= 0.0).any():
         raise ValueError(f"{sigma_col!r} must be greater than 0 for every row")
 
+    dist = normalize_distribution_name(dist_type)
+    if dist == "student_t":
+        if df_col not in df.columns:
+            raise ValueError("Student-t distribution parameters require a df column")
+        df_values = pd.to_numeric(df[df_col], errors="coerce")
+        if df_values.isna().any():
+            raise ValueError(f"{df_col!r} contains missing or non-numeric values")
+        df_array = df_values.to_numpy(dtype=float)
+        if not np.isfinite(df_array).all() or (df_array <= 0.0).any():
+            raise ValueError(f"{df_col!r} must be finite and greater than 0")
+
 
 def negative_log_likelihood(
     y_true: pd.Series | np.ndarray | list[float],
     mu: pd.Series | np.ndarray | list[float],
     sigma: pd.Series | np.ndarray | list[float],
     dist_type: str = "normal",
+    df: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> float:
-    _validate_dist_type(dist_type)
     y, mu_array, sigma_array = _validate_distribution_arrays(y_true, mu, sigma)
 
-    logpdf = norm.logpdf(y, loc=mu_array, scale=sigma_array)
+    logpdf = distribution_logpdf(
+        y,
+        mu=mu_array,
+        sigma=sigma_array,
+        distribution=dist_type,
+        df=df,
+    )
     if not np.isfinite(logpdf).all():
-        raise ValueError("Normal logpdf produced non-finite values")
+        raise ValueError("Distribution logpdf produced non-finite values")
     nll = float(-np.mean(logpdf))
     if not math.isfinite(nll):
         raise ValueError(f"NLL is not finite: {nll!r}")
@@ -63,6 +89,8 @@ def prediction_interval_coverage(
     mu: pd.Series | np.ndarray | list[float],
     sigma: pd.Series | np.ndarray | list[float],
     levels: Iterable[float] = (0.5, 0.8, 0.9),
+    dist_type: str = "normal",
+    df: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> pd.DataFrame:
     y, mu_array, sigma_array = _validate_distribution_arrays(y_true, mu, sigma)
     parsed_levels = _validate_interval_levels(levels)
@@ -71,8 +99,20 @@ def prediction_interval_coverage(
     for level in parsed_levels:
         lower_q = (1.0 - level) / 2.0
         upper_q = 1.0 - lower_q
-        lower = norm.ppf(lower_q, loc=mu_array, scale=sigma_array)
-        upper = norm.ppf(upper_q, loc=mu_array, scale=sigma_array)
+        lower = distribution_ppf(
+            np.full(len(y), lower_q, dtype=float),
+            mu=mu_array,
+            sigma=sigma_array,
+            distribution=dist_type,
+            df=df,
+        )
+        upper = distribution_ppf(
+            np.full(len(y), upper_q, dtype=float),
+            mu=mu_array,
+            sigma=sigma_array,
+            distribution=dist_type,
+            df=df,
+        )
         if not np.isfinite(lower).all() or not np.isfinite(upper).all():
             raise ValueError(f"Prediction interval bounds are non-finite for level={level:g}")
 
@@ -170,10 +210,16 @@ def compute_pit_values(
     mu: pd.Series | np.ndarray | list[float],
     sigma: pd.Series | np.ndarray | list[float],
     dist_type: str = "normal",
+    df: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> pd.Series:
-    _validate_dist_type(dist_type)
     y, mu_array, sigma_array = _validate_distribution_arrays(y_true, mu, sigma)
-    pit = norm.cdf(y, loc=mu_array, scale=sigma_array)
+    pit = distribution_cdf(
+        y,
+        mu=mu_array,
+        sigma=sigma_array,
+        distribution=dist_type,
+        df=df,
+    )
     if not np.isfinite(pit).all():
         raise ValueError("PIT values contain non-finite values")
     if ((pit < 0.0) | (pit > 1.0)).any():
@@ -185,9 +231,13 @@ def standardized_residuals(
     y_true: pd.Series | np.ndarray | list[float],
     mu: pd.Series | np.ndarray | list[float],
     sigma: pd.Series | np.ndarray | list[float],
+    dist_type: str = "normal",
+    df: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> pd.Series:
     y, mu_array, sigma_array = _validate_distribution_arrays(y_true, mu, sigma)
-    z = (y - mu_array) / sigma_array
+    denominator = distribution_std(sigma_array, distribution=dist_type, df=df)
+    denominator = np.where(np.isfinite(denominator) & (denominator > 0.0), denominator, sigma_array)
+    z = (y - mu_array) / denominator
     if not np.isfinite(z).all():
         raise ValueError("Standardized residuals contain non-finite values")
     return pd.Series(z, index=_maybe_index(y_true), name="standardized_residual")
@@ -226,6 +276,8 @@ def coverage_by_group(
     y_col: str = "forecast_error",
     mu_col: str = "mu",
     sigma_col: str = "sigma",
+    dist_type: str = "normal",
+    df_col: str = "df",
     level: float = 0.8,
     min_count: int = 30,
 ) -> pd.DataFrame:
@@ -246,6 +298,8 @@ def coverage_by_group(
             group_df[mu_col],
             group_df[sigma_col],
             levels=(level,),
+            dist_type=dist_type,
+            df=group_df[df_col] if normalize_distribution_name(dist_type) == "student_t" else None,
         ).iloc[0]
         rows.append(
             {
@@ -343,10 +397,7 @@ def validate_bucket_probabilities(
 
 
 def _validate_dist_type(dist_type: str) -> str:
-    normalized = str(dist_type).strip().lower()
-    if normalized in {"normal", "gaussian"}:
-        return "normal"
-    raise ValueError(f"Unsupported dist_type={dist_type!r}; only 'normal' is supported")
+    return normalize_distribution_name(dist_type)
 
 
 def _validate_distribution_arrays(
