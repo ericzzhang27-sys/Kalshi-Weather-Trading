@@ -40,9 +40,11 @@ from src.evaluation import (  # noqa: E402
     standardized_residuals,
     validate_bucket_probabilities,
 )
+from src.features import load_feature_list, validate_feature_columns_exist  # noqa: E402
 from src.splits import chronological_train_validation_test_split  # noqa: E402
 from src.train_ngboost import (  # noqa: E402
     DEFAULT_FEATURE_COLUMNS_PATH,
+    DEFAULT_FINAL_FEATURE_LIST_PATH,
     DEFAULT_MODELING_TABLE_PATH,
     build_imputed_feature_frames,
     build_prediction_frame,
@@ -75,10 +77,12 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     dataset_path = resolve_path(args.dataset_path)
     feature_columns_path = resolve_path(args.feature_columns_path)
+    feature_list_path = resolve_path(args.feature_list)
 
     prepared = prepare_training_data(
         dataset_path=dataset_path,
         feature_columns_path=feature_columns_path,
+        feature_list_path=feature_list_path,
         train_end_date=args.train_end_date,
         validation_end_date=args.validation_end_date,
     )
@@ -178,6 +182,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--dataset-path", default=str(DEFAULT_MODELING_TABLE_PATH))
     parser.add_argument("--feature-columns-path", default=str(DEFAULT_FEATURE_COLUMNS_PATH))
+    parser.add_argument(
+        "--feature-list",
+        default=str(DEFAULT_FINAL_FEATURE_LIST_PATH),
+        help="Explicit production feature-list JSON. Used by default when present.",
+    )
     parser.add_argument("--train-end-date", default=None)
     parser.add_argument("--validation-end-date", default=None)
     parser.add_argument(
@@ -191,6 +200,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 def prepare_training_data(
     dataset_path: Path,
     feature_columns_path: Path,
+    feature_list_path: Path,
     train_end_date: str | None,
     validation_end_date: str | None,
 ) -> dict[str, Any]:
@@ -208,8 +218,14 @@ def prepare_training_data(
     ]:
         validate_target_column(split_df, split_name=split_name)
 
-    feature_columns = get_feature_columns(df, feature_columns_path)
+    if feature_list_path.exists():
+        feature_columns = load_feature_list(feature_list_path)
+        feature_source_path = feature_list_path
+    else:
+        feature_columns = get_feature_columns(df, feature_columns_path)
+        feature_source_path = feature_columns_path
     validate_no_leakage_feature_columns(feature_columns)
+    feature_columns = validate_feature_columns_exist(df, feature_columns)
     X_train, X_validation, X_test, imputer, preprocessing_notes = build_imputed_feature_frames(
         train_df=split_result.train,
         validation_df=split_result.validation,
@@ -233,7 +249,7 @@ def prepare_training_data(
         "split_summary": split_result.summary,
         "preprocessing_notes": preprocessing_notes,
         "dataset_path": dataset_path,
-        "feature_columns_path": feature_columns_path,
+        "feature_columns_path": feature_source_path,
     }
 
 

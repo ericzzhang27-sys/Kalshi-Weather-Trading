@@ -11,7 +11,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
 
 
 if __package__ in {None, ""}:
@@ -27,6 +26,7 @@ from src.calibration import (  # noqa: E402
 from src.distribution_pricing import (  # noqa: E402
     validate_bucket_probabilities as validate_long_bucket_probabilities,
 )
+from src.distributional_model import distribution_cdf, normalize_distribution_name  # noqa: E402
 from src.evaluation import (  # noqa: E402
     bucket_brier_scores,
     compute_pit_values,
@@ -165,6 +165,8 @@ def load_ngboost_params(path: str | Path) -> pd.DataFrame:
     df = pd.read_csv(input_path)
     if "row_id" not in df.columns:
         df.insert(0, "row_id", np.arange(len(df), dtype=int))
+    if "distribution_type" not in df.columns:
+        df["distribution_type"] = "normal"
     required = ["date", "forecast_error", "mu", "sigma"]
     missing = [column for column in required if column not in df.columns]
     if missing:
@@ -172,6 +174,24 @@ def load_ngboost_params(path: str | Path) -> pd.DataFrame:
     validate_distribution_params(df)
     df = add_stable_keys(df)
     return df
+
+
+def infer_params_distribution_type(df: pd.DataFrame) -> str:
+    if "distribution_type" not in df.columns:
+        return "normal"
+    values = df["distribution_type"].dropna().astype(str).str.strip()
+    values = values[values != ""]
+    if values.empty:
+        return "normal"
+    normalized = {normalize_distribution_name(value) for value in values.unique()}
+    if len(normalized) != 1:
+        raise ValueError(f"Evaluation params contain multiple distribution types: {sorted(normalized)}")
+    return next(iter(normalized))
+
+
+def model_name_from_params(df: pd.DataFrame) -> str:
+    dist = infer_params_distribution_type(df)
+    return f"ngboost_{dist}_v0"
 
 
 def enrich_ngboost_params(params: pd.DataFrame, modeling_rows_path: str | Path) -> pd.DataFrame:
@@ -429,17 +449,27 @@ def compute_distribution_reports(
     pit_by_split: dict[str, pd.Series] = {}
 
     for split_name, split_df in iter_evaluation_splits(params):
-        validate_distribution_params(split_df)
+        dist = infer_params_distribution_type(split_df)
+        df_values = split_df["df"] if dist == "student_t" and "df" in split_df.columns else None
+        validate_distribution_params(split_df, dist_type=dist)
         coverage = prediction_interval_coverage(
             split_df["forecast_error"],
             split_df["mu"],
             split_df["sigma"],
             levels=(0.5, 0.8, 0.9),
+            dist_type=dist,
+            df=df_values,
         )
         coverage.insert(0, "split", split_name)
         coverage_frames.append(coverage)
 
-        z = standardized_residuals(split_df["forecast_error"], split_df["mu"], split_df["sigma"])
+        z = standardized_residuals(
+            split_df["forecast_error"],
+            split_df["mu"],
+            split_df["sigma"],
+            dist_type=dist,
+            df=df_values,
+        )
         summary = residual_summary(z)
         summary.insert(0, "split", split_name)
         residual_frames.append(summary)
@@ -448,6 +478,8 @@ def compute_distribution_reports(
             split_df["forecast_error"],
             split_df["mu"],
             split_df["sigma"],
+            dist_type=dist,
+            df=df_values,
         )
 
     return (
@@ -485,6 +517,7 @@ def compute_and_plot_calibration_tables(
     market_labels: pd.Series,
     bucket_brier_report: pd.DataFrame,
 ) -> pd.DataFrame:
+    model_name = model_name_from_params(params)
     combined_brier = bucket_brier_report[
         bucket_brier_report["split"] == "combined_out_of_sample"
     ]
@@ -498,7 +531,7 @@ def compute_and_plot_calibration_tables(
         table = calibration_tables_by_bucket(probs, labels, n_bins=10)
         table = table[table["bucket"].isin(selected_buckets)].reset_index(drop=True)
         table.insert(0, "split", split_name)
-        table.insert(1, "model", "ngboost_normal_v0")
+        table.insert(1, "model", model_name)
         table.insert(2, "bucket_schema", "kalshi_around_forecast_bucket_index")
         tables.append(table)
 
@@ -522,8 +555,15 @@ def compute_and_plot_group_coverage(params: pd.DataFrame) -> pd.DataFrame:
 
     frames: list[pd.DataFrame] = []
     for split_name, split_df in iter_evaluation_splits(params):
+        dist = infer_params_distribution_type(split_df)
         for group_col in group_columns:
-            grouped = coverage_by_group(split_df, group_col, level=0.8, min_count=30)
+            grouped = coverage_by_group(
+                split_df,
+                group_col,
+                level=0.8,
+                min_count=30,
+                dist_type=dist,
+            )
             output = grouped.rename(columns={group_col: "group_value"})
             output.insert(0, "split", split_name)
             output.insert(1, "group_col", group_col)
@@ -545,21 +585,26 @@ def compute_model_comparison(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     rows: list[dict[str, Any]] = []
     comparison_calibration: list[pd.DataFrame] = []
+    model_name = model_name_from_params(params)
 
     for split_name in OOS_SPLITS:
         split_df = params[params["split"] == split_name].copy()
-        probs = normal_error_interval_probabilities(split_df)
+        dist = infer_params_distribution_type(split_df)
+        df_values = split_df["df"] if dist == "student_t" and "df" in split_df.columns else None
+        probs = error_interval_probabilities(split_df, dist_type=dist)
         labels = assign_error_interval_labels(split_df["forecast_error"])
         brier = bucket_brier_scores(probs, labels)
         rows.append(
             build_comparison_row(
-                model="ngboost_normal_v0",
+                model=model_name,
                 split=split_name,
                 n_rows=len(split_df),
                 nll=negative_log_likelihood(
                     split_df["forecast_error"],
                     split_df["mu"],
                     split_df["sigma"],
+                    dist_type=dist,
+                    df=df_values,
                 ),
                 interval_log_loss_value=interval_log_loss(probs, labels),
                 mean_bucket_brier=float(brier["brier_score"].mean()),
@@ -576,11 +621,12 @@ def compute_model_comparison(
             baseline,
         )
 
-        ngboost_probs = normal_error_interval_probabilities(ngboost_test)
+        dist = infer_params_distribution_type(ngboost_test)
+        ngboost_probs = error_interval_probabilities(ngboost_test, dist_type=dist)
         ngboost_labels = assign_error_interval_labels(ngboost_test["forecast_error"])
         ngboost_calibration = calibration_tables_by_bucket(ngboost_probs, ngboost_labels, n_bins=10)
         ngboost_calibration.insert(0, "split", "test")
-        ngboost_calibration.insert(1, "model", "ngboost_normal_v0")
+        ngboost_calibration.insert(1, "model", model_name)
         ngboost_calibration.insert(2, "bucket_schema", "day9_forecast_error_intervals")
         comparison_calibration.append(ngboost_calibration)
 
@@ -656,15 +702,25 @@ def build_comparison_row(
     }
 
 
-def normal_error_interval_probabilities(df: pd.DataFrame) -> pd.DataFrame:
+def error_interval_probabilities(df: pd.DataFrame, dist_type: str | None = None) -> pd.DataFrame:
+    dist = infer_params_distribution_type(df) if dist_type is None else normalize_distribution_name(dist_type)
     mu = pd.to_numeric(df["mu"], errors="raise").to_numpy(dtype=float)
     sigma = pd.to_numeric(df["sigma"], errors="raise").to_numpy(dtype=float)
+    df_values = df["df"] if dist == "student_t" and "df" in df.columns else None
     probabilities: dict[str, np.ndarray] = {}
     for spec in ERROR_INTERVAL_SCHEMA:
         lower = spec["lower"]
         upper = spec["upper"]
-        lower_cdf = 0.0 if lower is None else norm.cdf(float(lower), loc=mu, scale=sigma)
-        upper_cdf = 1.0 if upper is None else norm.cdf(float(upper), loc=mu, scale=sigma)
+        lower_cdf = (
+            np.zeros(len(df), dtype=float)
+            if lower is None
+            else distribution_cdf(float(lower), mu=mu, sigma=sigma, distribution=dist, df=df_values)
+        )
+        upper_cdf = (
+            np.ones(len(df), dtype=float)
+            if upper is None
+            else distribution_cdf(float(upper), mu=mu, sigma=sigma, distribution=dist, df=df_values)
+        )
         probabilities[spec["label"]] = np.asarray(upper_cdf - lower_cdf, dtype=float)
     probs = pd.DataFrame(probabilities).reset_index(drop=True)
     return validate_bucket_probabilities(probs, allow_renormalize=True)

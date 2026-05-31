@@ -14,6 +14,8 @@ if str(ROOT) not in sys.path:
 from src.evaluation import (
     bucket_brier_scores,
     compute_pit_values,
+    grouped_interval_coverage_report,
+    interval_coverage_report,
     interval_log_loss,
     negative_log_likelihood,
     prediction_interval_coverage,
@@ -50,6 +52,48 @@ def test_prediction_interval_coverage_returns_one_row_per_level() -> None:
 
     assert coverage["level"].tolist() == [0.5, 0.8, 0.9]
     assert len(coverage) == 3
+
+
+def test_interval_coverage_report_uses_day18_column_names() -> None:
+    report = interval_coverage_report(
+        y_true=np.array([0.0, 0.5, -0.5]),
+        mu=np.zeros(3),
+        sigma=np.ones(3),
+        split="validation",
+        levels=(0.5, 0.8),
+    )
+
+    assert report.columns.tolist() == [
+        "split",
+        "nominal_coverage",
+        "empirical_coverage",
+        "coverage_gap",
+        "n_rows",
+        "avg_interval_width",
+    ]
+    assert report["split"].tolist() == ["validation", "validation"]
+
+
+def test_grouped_interval_coverage_report_flags_small_groups() -> None:
+    df = pd.DataFrame(
+        {
+            "hour": [0, 0, 1],
+            "forecast_error": [0.0, 0.5, -0.5],
+            "mu": [0.0, 0.0, 0.0],
+            "sigma": [1.0, 1.0, 1.0],
+        }
+    )
+
+    report = grouped_interval_coverage_report(
+        df,
+        group_col="hour",
+        split="validation",
+        levels=(0.8,),
+        min_group_n=3,
+    )
+
+    assert report["group_value"].tolist() == [0, 1]
+    assert report["enough_sample"].tolist() == [False, False]
 
 
 def test_bucket_brier_scores_are_between_zero_and_one() -> None:

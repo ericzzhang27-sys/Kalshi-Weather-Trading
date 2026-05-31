@@ -1,0 +1,17 @@
+{
+  "run_name": "minimal_feature_set",
+  "target": "forecast_error",
+  "features": [
+    "forecast_high",
+    "current_temp",
+    "max_temp_so_far",
+    "hour_sin",
+    "hour_cos",
+    "day_of_year_sin",
+    "day_of_year_cos",
+    "current_temp_minus_forecast_temp",
+    "max_so_far_minus_forecast_high"
+  ],
+  "created_at_utc": "2026-05-30T15:50:31.448972+00:00",
+  "selection_data": "chronological_validation_only"
+}

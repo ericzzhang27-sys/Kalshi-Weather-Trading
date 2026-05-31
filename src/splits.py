@@ -40,6 +40,8 @@ def chronological_train_validation_test_split(
     df: pd.DataFrame,
     train_end_date: str | pd.Timestamp | None = None,
     validation_end_date: str | pd.Timestamp | None = None,
+    validation_start_date: str | pd.Timestamp | None = None,
+    test_start_date: str | pd.Timestamp | None = None,
     date_column: str | None = None,
 ) -> ChronologicalSplitResult:
     """Split rows by date into train, validation, and test sets.
@@ -68,6 +70,53 @@ def chronological_train_validation_test_split(
     ]
     working = working.sort_values(sort_columns).reset_index(drop=True)
 
+    using_start_dates = validation_start_date is not None or test_start_date is not None
+    if using_start_dates:
+        if train_end_date is not None or validation_end_date is not None:
+            raise ValueError(
+                "Use either train_end_date/validation_end_date or "
+                "validation_start_date/test_start_date, not both"
+            )
+        if validation_start_date is None or test_start_date is None:
+            raise ValueError(
+                "Both validation_start_date and test_start_date are required for start-date splits"
+            )
+        validation_start = pd.to_datetime(validation_start_date, errors="raise").normalize()
+        test_start = pd.to_datetime(test_start_date, errors="raise").normalize()
+        if validation_start >= test_start:
+            raise ValueError(
+                "validation_start_date must be earlier than test_start_date; "
+                f"got {validation_start.date()} and {test_start.date()}"
+            )
+
+        split_dates = working[split_date_column]
+        train = working[split_dates < validation_start].copy()
+        validation = working[
+            (split_dates >= validation_start) & (split_dates < test_start)
+        ].copy()
+        test = working[split_dates >= test_start].copy()
+
+        summary = build_split_summary(
+            train=train,
+            validation=validation,
+            test=test,
+            date_column=split_date_column,
+            train_end=_max_date(train, split_date_column) if not train.empty else validation_start,
+            validation_end=_max_date(validation, split_date_column)
+            if not validation.empty
+            else test_start,
+            validation_start=validation_start,
+            test_start=test_start,
+            strategy="chronological",
+        )
+        validate_chronological_splits(train, validation, test, split_date_column)
+        return ChronologicalSplitResult(
+            train=train,
+            validation=validation,
+            test=test,
+            summary=summary,
+        )
+
     if train_end_date is None or validation_end_date is None:
         default_train_end, default_validation_end = choose_default_split_dates(parsed_dates)
         if train_end_date is None:
@@ -95,6 +144,9 @@ def chronological_train_validation_test_split(
         date_column=split_date_column,
         train_end=train_end,
         validation_end=validation_end,
+        validation_start=_min_date(validation, split_date_column),
+        test_start=_min_date(test, split_date_column),
+        strategy="chronological",
     )
     validate_chronological_splits(train, validation, test, split_date_column)
     return ChronologicalSplitResult(
@@ -158,6 +210,13 @@ def validate_chronological_splits(
             f"({validation_max.date()} >= {test_min.date()})"
         )
 
+    if len(train.index.intersection(validation.index)) > 0:
+        raise AssertionError("Chronological split overlap: train and validation share row indices")
+    if len(train.index.intersection(test.index)) > 0:
+        raise AssertionError("Chronological split overlap: train and test share row indices")
+    if len(validation.index.intersection(test.index)) > 0:
+        raise AssertionError("Chronological split overlap: validation and test share row indices")
+
 
 def build_split_summary(
     train: pd.DataFrame,
@@ -166,11 +225,19 @@ def build_split_summary(
     date_column: str,
     train_end: pd.Timestamp,
     validation_end: pd.Timestamp,
+    validation_start: pd.Timestamp | None = None,
+    test_start: pd.Timestamp | None = None,
+    strategy: str = "chronological",
 ) -> dict[str, Any]:
     return {
+        "strategy": strategy,
         "date_column": date_column,
         "train_end_date": train_end.date().isoformat(),
+        "validation_start_date": None
+        if validation_start is None
+        else validation_start.date().isoformat(),
         "validation_end_date": validation_end.date().isoformat(),
+        "test_start_date": None if test_start is None else test_start.date().isoformat(),
         "splits": {
             "train": _split_summary(train, date_column),
             "validation": _split_summary(validation, date_column),

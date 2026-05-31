@@ -823,7 +823,7 @@ def validate_bucket_probabilities(
 def load_prediction_params(
     path: str | Path,
     splits: list[str] | None = None,
-    dist_type: str = "normal",
+    dist_type: str = "auto",
 ) -> pd.DataFrame:
     params_path = Path(path)
     if not params_path.exists():
@@ -835,7 +835,27 @@ def load_prediction_params(
         if "split" not in df.columns:
             raise ValueError("Cannot filter by split because the prediction file has no split column")
         df = df[df["split"].isin(splits)].copy()
-    return _validate_prediction_params_frame(df, dist_type=dist_type)
+    inferred_dist = infer_prediction_distribution_type(df, dist_type)
+    return _validate_prediction_params_frame(df, dist_type=inferred_dist)
+
+
+def infer_prediction_distribution_type(
+    pred_df: pd.DataFrame,
+    requested_dist_type: str = "auto",
+) -> str:
+    requested = str(requested_dist_type).strip().lower()
+    if requested not in {"", "auto", "infer"}:
+        return normalize_distribution_name(str(requested_dist_type))
+    if "distribution_type" not in pred_df.columns:
+        return "normal"
+    values = pred_df["distribution_type"].dropna().astype(str).str.strip()
+    values = values[values != ""]
+    if values.empty:
+        return "normal"
+    normalized = {normalize_distribution_name(value) for value in values.unique()}
+    if len(normalized) != 1:
+        raise ValueError(f"Prediction file contains multiple distribution types: {sorted(normalized)}")
+    return next(iter(normalized))
 
 
 def _csv_bound_value(value: Any) -> float | None:
@@ -1118,7 +1138,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=["validation", "test"],
         help="Splits to include from the parameter CSV.",
     )
-    parser.add_argument("--dist-type", default="normal")
+    parser.add_argument(
+        "--dist-type",
+        default="auto",
+        help="Distribution to use for bucket pricing. Defaults to auto-infer from params.",
+    )
     parser.add_argument("--output-path", default=str(DEFAULT_BUCKET_PROBS_OUTPUT_PATH))
     parser.add_argument(
         "--validation-output-path",
@@ -1132,6 +1156,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     pred_df = load_prediction_params(args.params_path, splits=args.splits, dist_type=args.dist_type)
+    dist_type = infer_prediction_distribution_type(pred_df, args.dist_type)
     if args.bucket_schema_path:
         buckets = load_bucket_schema(args.bucket_schema_path)
         bucket_mode = f"fixed_schema:{args.bucket_schema_path}"
@@ -1149,7 +1174,7 @@ def main(argv: list[str] | None = None) -> None:
     bucket_probs = price_buckets_for_dataframe(
         pred_df,
         buckets,
-        dist_type=args.dist_type,
+        dist_type=dist_type,
         forecast_rounding=args.forecast_rounding,
     )
     validation_summary = validate_bucket_probabilities(bucket_probs)
@@ -1164,7 +1189,7 @@ def main(argv: list[str] | None = None) -> None:
         validation_summary,
         source_prediction_file=args.params_path,
         report_path=args.report_path,
-        dist_type=args.dist_type,
+        dist_type=dist_type,
         bucket_mode=bucket_mode,
     )
     print(

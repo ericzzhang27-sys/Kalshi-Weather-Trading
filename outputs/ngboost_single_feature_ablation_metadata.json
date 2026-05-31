@@ -1,0 +1,9 @@
+{
+  "selection_data": "chronological_validation_only",
+  "baseline_feature_count": 39,
+  "baseline_validation_nll": 1.3240006497536272,
+  "train_rows": 17520,
+  "validation_rows": 8784,
+  "output_path": "outputs\\ngboost_single_feature_ablation.csv",
+  "note": "Leave-one-feature-out ablation. Positive delta means removing the feature worsened validation NLL, so the feature helped."
+}

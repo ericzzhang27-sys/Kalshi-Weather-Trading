@@ -6,8 +6,10 @@ import numpy as np
 import pandas as pd
 
 try:
+    from .calibration import apply_sigma_scaling
     from .distributional_model import predict_distribution_details
 except ImportError:
+    from calibration import apply_sigma_scaling
     from distributional_model import predict_distribution_details
 
 
@@ -79,3 +81,27 @@ def predict_distribution_params(
     ordered = [column for column in METADATA_COLUMNS if column in result.columns]
     remaining = [column for column in result.columns if column not in ordered]
     return result[ordered + remaining]
+
+
+def apply_sigma_scaling_to_predictions(
+    predictions: pd.DataFrame,
+    alpha: float,
+    sigma_col: str = "sigma",
+    output_sigma_col: str = "sigma",
+    raw_sigma_col: str = "raw_sigma",
+) -> pd.DataFrame:
+    """
+    Return distribution parameters with post-hoc sigma scaling applied.
+
+    This keeps calibrated bucket generation transparent: mu is unchanged, sigma
+    is multiplied by a validation-fit alpha, and the original sigma is retained
+    when the calibrated values replace the standard sigma column.
+    """
+    if sigma_col not in predictions.columns:
+        raise ValueError(f"Prediction frame is missing sigma column {sigma_col!r}")
+    result = predictions.copy()
+    if output_sigma_col == sigma_col and raw_sigma_col not in result.columns:
+        result[raw_sigma_col] = pd.to_numeric(result[sigma_col], errors="raise")
+    result[output_sigma_col] = apply_sigma_scaling(result[sigma_col], alpha)
+    result["sigma_scaling_alpha"] = float(alpha)
+    return result

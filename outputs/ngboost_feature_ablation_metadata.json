@@ -1,0 +1,46 @@
+{
+  "created_at_utc": "2026-05-30T15:51:04.769988+00:00",
+  "dataset_path": "data\\processed\\modeling_rows_v1.csv",
+  "selection_data": "chronological_validation_only",
+  "test_set_used_for_feature_selection": false,
+  "split_summary": {
+    "strategy": "chronological",
+    "date_column": "date",
+    "train_end_date": "2023-12-31",
+    "validation_start_date": "2024-01-01",
+    "validation_end_date": "2024-12-31",
+    "test_start_date": "2025-01-01",
+    "splits": {
+      "train": {
+        "row_count": 17520,
+        "date_min": "2022-01-01",
+        "date_max": "2023-12-31"
+      },
+      "validation": {
+        "row_count": 8784,
+        "date_min": "2024-01-01",
+        "date_max": "2024-12-31"
+      },
+      "test": {
+        "row_count": 12120,
+        "date_min": "2025-01-01",
+        "date_max": "2026-05-20"
+      }
+    }
+  },
+  "day16_selected_run_id": "ngb16_20260530T144539Z_02_more_trees_lower_lr",
+  "day16_selected_candidate_name": "more_trees_lower_lr",
+  "day16_hyperparameters": {
+    "n_estimators": 500,
+    "learning_rate": 0.02,
+    "max_depth": 2,
+    "min_samples_leaf": 20,
+    "minibatch_frac": 1.0,
+    "natural_gradient": true,
+    "random_state": 42
+  },
+  "run_count": 9,
+  "successful_run_count": 9,
+  "ablation_output_path": "outputs\\ngboost_feature_ablation.csv",
+  "brier_output_path": "outputs\\ngboost_feature_ablation_brier_by_bucket.csv"
+}

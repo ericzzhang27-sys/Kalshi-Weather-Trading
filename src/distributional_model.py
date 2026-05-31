@@ -158,6 +158,16 @@ def train_ngboost_distribution(
     X_val: pd.DataFrame | None = None,
     y_val: pd.Series | np.ndarray | None = None,
     distribution: str = "normal",
+    n_estimators: int = 120,
+    learning_rate: float = 0.05,
+    max_depth: int = 2,
+    min_samples_leaf: int = 50,
+    minibatch_frac: float = 1.0,
+    natural_gradient: bool = True,
+    random_state: int = 11,
+    col_sample: float = 1.0,
+    verbose: bool = False,
+    early_stopping_rounds: int | None = 20,
 ) -> Any:
     """Train an NGBoost signed forecast-error distribution."""
 
@@ -180,30 +190,37 @@ def train_ngboost_distribution(
     dist_class = get_ngboost_distribution_class(dist_name)
 
     base_learner = DecisionTreeRegressor(
-        max_depth=2,
-        min_samples_leaf=50,
-        random_state=11,
+        max_depth=int(max_depth),
+        min_samples_leaf=int(min_samples_leaf),
+        random_state=int(random_state),
     )
     model = NGBRegressor(
         Dist=dist_class,
         Score=LogScore,
         Base=base_learner,
-        n_estimators=120,
-        learning_rate=0.05,
-        minibatch_frac=1.0,
-        col_sample=1.0,
-        random_state=11,
-        verbose=False,
+        natural_gradient=bool(natural_gradient),
+        n_estimators=int(n_estimators),
+        learning_rate=float(learning_rate),
+        minibatch_frac=float(minibatch_frac),
+        col_sample=float(col_sample),
+        random_state=int(random_state),
+        verbose=bool(verbose),
     )
 
     y_train_array = np.asarray(y_train, dtype=float)
-    if X_val is not None and y_val is not None and len(X_val) > 0:
+    if (
+        X_val is not None
+        and y_val is not None
+        and len(X_val) > 0
+        and early_stopping_rounds is not None
+        and int(early_stopping_rounds) > 0
+    ):
         model.fit(
             X_train,
             y_train_array,
             X_val=X_val,
             Y_val=np.asarray(y_val, dtype=float),
-            early_stopping_rounds=20,
+            early_stopping_rounds=int(early_stopping_rounds),
         )
     else:
         model.fit(X_train, y_train_array)

@@ -124,6 +124,16 @@ EXCLUDED_FEATURE_COLUMNS = {
     "forecast_source",
 }
 
+FORBIDDEN_MODEL_FEATURE_COLUMNS = EXCLUDED_FEATURE_COLUMNS | {
+    "actual_temp",
+    "actual_temperature",
+    "bucket_label",
+    "final_temp_bucket",
+    "settlement_bucket",
+    "settlement_temperature",
+    "timestamp",
+}
+
 LEAKAGE_NAME_FRAGMENTS = [
     "actual_high",
     "official_high",
@@ -132,6 +142,17 @@ LEAKAGE_NAME_FRAGMENTS = [
     "daily_high",
     "actual_max_temp",
     "max_temp_today",
+]
+
+MODEL_FEATURE_FORBIDDEN_FRAGMENTS = [
+    *LEAKAGE_NAME_FRAGMENTS,
+    "forecast_error",
+    "settlement",
+    "bucket",
+    "future",
+    "next_",
+    "post_settlement",
+    "after_settlement",
 ]
 
 METADATA_NAME_FRAGMENTS = [
@@ -143,6 +164,116 @@ METADATA_NAME_FRAGMENTS = [
     "reference_time",
     "run_time",
     "as_of",
+]
+
+DAY16_MODEL_FEATURES = [
+    "forecast_high",
+    "day_of_year_sin",
+    "day_of_year_cos",
+    "hour_sin",
+    "hour_cos",
+    "month",
+    "season",
+    "forecast_horizon_hours",
+    "current_temp",
+    "dew_point",
+    "cloud_cover_now",
+    "wind_speed",
+    "precipitation_now",
+    "temp_minus_dew_point",
+    "wind_dir_sin",
+    "wind_dir_cos",
+    "max_temp_so_far",
+    "temp_change_60m",
+    "temp_change_120m",
+    "temp_change_180m",
+    "temp_change_240m",
+    "temp_change_300m",
+    "temp_acceleration_60m",
+    "temp_change_60m_minus_3h_avg_rate",
+    "forecast_temp_current_hour",
+    "current_temp_minus_forecast_temp",
+    "forecast_max_so_far",
+    "max_so_far_minus_forecast_max_so_far",
+    "current_temp_minus_max_so_far",
+    "minutes_since_max_temp_so_far",
+    "hour_of_max_temp_so_far",
+    "max_so_far_minus_forecast_high",
+    "mean_temp_error_so_far",
+    "max_temp_error_so_far",
+    "num_new_highs_last_3h",
+    "temp_range_so_far",
+    "area_under_temp_curve_so_far",
+    "near_boundary_duration_so_far",
+    "minutes_until_typical_peak",
+]
+
+FEATURE_GROUPS = {
+    "time_season": [
+        "day_of_year_sin",
+        "day_of_year_cos",
+        "hour_sin",
+        "hour_cos",
+        "month",
+        "season",
+        "forecast_horizon_hours",
+        "minutes_until_typical_peak",
+    ],
+    "observed_temperature_path": [
+        "current_temp",
+        "max_temp_so_far",
+        "current_temp_minus_max_so_far",
+        "minutes_since_max_temp_so_far",
+        "hour_of_max_temp_so_far",
+        "num_new_highs_last_3h",
+        "temp_range_so_far",
+        "area_under_temp_curve_so_far",
+        "near_boundary_duration_so_far",
+    ],
+    "forecast_relative": [
+        "forecast_high",
+        "forecast_temp_current_hour",
+        "current_temp_minus_forecast_temp",
+        "forecast_max_so_far",
+        "max_so_far_minus_forecast_max_so_far",
+        "max_so_far_minus_forecast_high",
+        "mean_temp_error_so_far",
+        "max_temp_error_so_far",
+    ],
+    "humidity_dew_point": [
+        "dew_point",
+        "temp_minus_dew_point",
+    ],
+    "cloud_precipitation": [
+        "cloud_cover_now",
+        "precipitation_now",
+    ],
+    "wind": [
+        "wind_speed",
+        "wind_dir_sin",
+        "wind_dir_cos",
+    ],
+    "recent_temperature_changes": [
+        "temp_change_60m",
+        "temp_change_120m",
+        "temp_change_180m",
+        "temp_change_240m",
+        "temp_change_300m",
+        "temp_acceleration_60m",
+        "temp_change_60m_minus_3h_avg_rate",
+    ],
+}
+
+MINIMAL_MODEL_FEATURES = [
+    "forecast_high",
+    "current_temp",
+    "max_temp_so_far",
+    "hour_sin",
+    "hour_cos",
+    "day_of_year_sin",
+    "day_of_year_cos",
+    "current_temp_minus_forecast_temp",
+    "max_so_far_minus_forecast_high",
 ]
 
 
@@ -1288,6 +1419,169 @@ def build_feature_matrix(
     if sort_columns:
         result = result.sort_values(sort_columns).reset_index(drop=True)
     return result
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"Feature names must be non-empty strings, got {value!r}")
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def _duplicate_values(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for value in values:
+        if value in seen and value not in duplicates:
+            duplicates.append(value)
+        seen.add(value)
+    return duplicates
+
+
+def _is_forbidden_model_feature(column: str) -> bool:
+    lower = column.lower()
+    if lower in FORBIDDEN_MODEL_FEATURE_COLUMNS:
+        return True
+    if _is_metadata_column(lower):
+        return True
+    return any(fragment == lower or fragment in lower for fragment in MODEL_FEATURE_FORBIDDEN_FRAGMENTS)
+
+
+def _validate_feature_list_names(features: list[str]) -> list[str]:
+    duplicates = _duplicate_values(features)
+    if duplicates:
+        raise ValueError(f"Feature list contains duplicates: {duplicates}")
+    unsafe = [column for column in features if _is_forbidden_model_feature(column)]
+    if unsafe:
+        raise ValueError(f"Feature list contains target, outcome, timestamp, or metadata columns: {unsafe}")
+    return list(features)
+
+
+def get_feature_groups() -> dict[str, list[str]]:
+    """Return the Day 17 NGBoost feature groups in deterministic order."""
+
+    groups = {group: _dedupe_preserve_order(list(features)) for group, features in FEATURE_GROUPS.items()}
+    grouped_features = [feature for features in groups.values() for feature in features]
+    missing_from_groups = [feature for feature in DAY16_MODEL_FEATURES if feature not in grouped_features]
+    unknown_grouped = [feature for feature in grouped_features if feature not in DAY16_MODEL_FEATURES]
+    if missing_from_groups or unknown_grouped:
+        raise ValueError(
+            "Feature groups must exactly cover the Day 16 feature list. "
+            f"Missing from groups: {missing_from_groups}; unknown grouped features: {unknown_grouped}"
+        )
+    _validate_feature_list_names(_dedupe_preserve_order(grouped_features))
+    return groups
+
+
+def get_all_model_features() -> list[str]:
+    """Return the frozen Day 16 full feature set in the original stable order."""
+
+    features = _dedupe_preserve_order(list(DAY16_MODEL_FEATURES))
+    _validate_feature_list_names(features)
+    return features
+
+
+def get_features_without_group(group_name: str) -> list[str]:
+    groups = get_feature_groups()
+    if group_name not in groups:
+        raise ValueError(f"Unknown feature group {group_name!r}. Available groups: {list(groups)}")
+    removed = set(groups[group_name])
+    return [feature for feature in get_all_model_features() if feature not in removed]
+
+
+def get_minimal_feature_set() -> list[str]:
+    """Return the small Day 17 robustness feature set using existing columns only."""
+
+    features = _dedupe_preserve_order(list(MINIMAL_MODEL_FEATURES))
+    _validate_feature_list_names(features)
+    return features
+
+
+def validate_feature_columns_exist(df: pd.DataFrame, features: list[str]) -> list[str]:
+    """
+    Validate an explicit model feature list against a modeling dataframe.
+
+    The check is intentionally strict: feature names must be unique, present,
+    numeric or boolean, non-empty on the dataframe, and free of target/outcome,
+    timestamp, bucket-label, and metadata columns.
+    """
+
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("df must be a pandas DataFrame")
+    validated = _validate_feature_list_names(list(features))
+    missing = [column for column in validated if column not in df.columns]
+    if missing:
+        raise ValueError(f"Feature columns are missing from dataframe: {missing}")
+    nonnumeric = [
+        column
+        for column in validated
+        if not (
+            pd.api.types.is_numeric_dtype(df[column])
+            or pd.api.types.is_bool_dtype(df[column])
+        )
+    ]
+    if nonnumeric:
+        raise ValueError(f"Feature columns must be numeric or boolean: {nonnumeric}")
+    all_missing = [column for column in validated if df[column].isna().all()]
+    if all_missing:
+        raise ValueError(f"Feature columns are entirely missing: {all_missing}")
+    return validated
+
+
+def load_feature_list(path: str | Path) -> list[str]:
+    """
+    Load an explicit feature list from JSON.
+
+    Supported shapes are either a raw JSON list, a Day 8-style
+    {"feature_columns": [...]}, or a Day 17 final {"features": [...]} payload.
+    """
+
+    feature_path = Path(path)
+    if not feature_path.exists():
+        raise FileNotFoundError(f"Feature list JSON not found: {feature_path}")
+    payload = json.loads(feature_path.read_text(encoding="utf-8"))
+    if isinstance(payload, list):
+        raw_features = payload
+    elif isinstance(payload, dict):
+        if "features" in payload:
+            raw_features = payload["features"]
+        elif "feature_columns" in payload:
+            raw_features = payload["feature_columns"]
+        else:
+            raise ValueError(f"Feature list JSON must contain 'features' or 'feature_columns': {feature_path}")
+    else:
+        raise ValueError(f"Feature list JSON must be a list or object: {feature_path}")
+    if not isinstance(raw_features, list):
+        raise ValueError(f"Feature list entry must be a list: {feature_path}")
+    features = list(raw_features)
+    return _validate_feature_list_names(features)
+
+
+def save_feature_list(path: str | Path, data: dict[str, Any] | list[str]) -> None:
+    """Write a feature-list payload as deterministic, valid JSON."""
+
+    if isinstance(data, list):
+        payload: dict[str, Any] | list[str] = _validate_feature_list_names(list(data))
+    elif isinstance(data, dict):
+        payload = dict(data)
+        if "features" in payload:
+            payload["features"] = _validate_feature_list_names(list(payload["features"]))
+        elif "feature_columns" in payload:
+            payload["feature_columns"] = _validate_feature_list_names(list(payload["feature_columns"]))
+        else:
+            raise ValueError("Feature-list payload must contain 'features' or 'feature_columns'")
+    else:
+        raise TypeError("data must be a feature list or a JSON-serializable dictionary")
+
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def _is_metadata_column(column: str) -> bool:

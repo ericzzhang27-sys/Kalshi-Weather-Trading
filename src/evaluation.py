@@ -141,6 +141,115 @@ def prediction_interval_coverage(
     )
 
 
+def interval_coverage_report(
+    y_true: pd.Series | np.ndarray | list[float],
+    mu: pd.Series | np.ndarray | list[float],
+    sigma: pd.Series | np.ndarray | list[float],
+    split: str,
+    levels: Iterable[float] = (0.5, 0.8, 0.9, 0.95),
+    dist_type: str = "normal",
+    df: pd.Series | np.ndarray | list[float] | float | None = None,
+) -> pd.DataFrame:
+    coverage = prediction_interval_coverage(
+        y_true,
+        mu,
+        sigma,
+        levels=levels,
+        dist_type=dist_type,
+        df=df,
+    )
+    result = coverage.rename(
+        columns={
+            "level": "nominal_coverage",
+            "actual_coverage": "empirical_coverage",
+            "coverage_error": "coverage_gap",
+            "n": "n_rows",
+        }
+    )
+    result.insert(0, "split", str(split))
+    return result[
+        [
+            "split",
+            "nominal_coverage",
+            "empirical_coverage",
+            "coverage_gap",
+            "n_rows",
+            "avg_interval_width",
+        ]
+    ]
+
+
+def grouped_interval_coverage_report(
+    df: pd.DataFrame,
+    group_col: str,
+    split: str,
+    y_col: str = "forecast_error",
+    mu_col: str = "mu",
+    sigma_col: str = "sigma",
+    dist_type: str = "normal",
+    df_col: str = "df",
+    levels: Iterable[float] = (0.5, 0.8, 0.9),
+    min_group_n: int = 30,
+) -> pd.DataFrame:
+    if df.empty:
+        raise ValueError("Cannot compute grouped coverage on an empty DataFrame")
+    required = [group_col, y_col, mu_col, sigma_col]
+    missing = [column for column in required if column not in df.columns]
+    if missing:
+        raise ValueError(f"Missing grouped coverage column(s): {missing}")
+    if int(min_group_n) < 1:
+        raise ValueError("min_group_n must be at least 1")
+
+    rows: list[dict[str, object]] = []
+    parsed_levels = _validate_interval_levels(levels)
+    dist = normalize_distribution_name(dist_type)
+    for group_value, group_df in df.groupby(group_col, dropna=False, sort=True):
+        coverage = prediction_interval_coverage(
+            group_df[y_col],
+            group_df[mu_col],
+            group_df[sigma_col],
+            levels=parsed_levels,
+            dist_type=dist,
+            df=group_df[df_col] if dist == "student_t" and df_col in group_df.columns else None,
+        )
+        residual = (
+            pd.to_numeric(group_df[y_col], errors="raise")
+            - pd.to_numeric(group_df[mu_col], errors="raise")
+        ).abs()
+        sigma_values = pd.to_numeric(group_df[sigma_col], errors="raise")
+        for _, coverage_row in coverage.iterrows():
+            rows.append(
+                {
+                    "split": str(split),
+                    "group_col": group_col,
+                    "group_value": group_value,
+                    "nominal_coverage": float(coverage_row["level"]),
+                    "empirical_coverage": float(coverage_row["actual_coverage"]),
+                    "coverage_gap": float(coverage_row["coverage_error"]),
+                    "n_rows": int(len(group_df)),
+                    "mean_predicted_sigma": float(sigma_values.mean()),
+                    "mean_abs_residual": float(residual.mean()),
+                    "enough_sample": bool(len(group_df) >= int(min_group_n)),
+                }
+            )
+
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "split",
+            "group_col",
+            "group_value",
+            "nominal_coverage",
+            "empirical_coverage",
+            "coverage_gap",
+            "n_rows",
+            "mean_predicted_sigma",
+            "mean_abs_residual",
+            "enough_sample",
+        ],
+    )
+
+
 def bucket_brier_scores(
     bucket_probs: pd.DataFrame,
     realized_bucket_labels: pd.Series,

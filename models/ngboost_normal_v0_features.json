@@ -2,9 +2,7 @@
   "model_name": "ngboost_normal_v0",
   "target": "forecast_error",
   "feature_columns": [
-    "forecast_high",
     "day_of_year_sin",
-    "day_of_year_cos",
     "hour_sin",
     "hour_cos",
     "month",
@@ -37,12 +35,12 @@
     "mean_temp_error_so_far",
     "max_temp_error_so_far",
     "num_new_highs_last_3h",
-    "temp_range_so_far",
     "area_under_temp_curve_so_far",
     "near_boundary_duration_so_far",
     "minutes_until_typical_peak"
   ],
-  "feature_count": 39,
-  "source_feature_spec": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\day8_features\\feature_columns.json",
+  "feature_count": 36,
+  "distribution_type": "normal",
+  "source_feature_spec": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\final_feature_list.json",
   "imputation_strategy": "median fit on train only"
 }

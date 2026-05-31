@@ -1,0 +1,108 @@
+data:
+  modeling_table_path: data/processed/modeling_rows_v1.csv
+  feature_columns_path: outputs/day8_features/feature_columns.json
+  feature_list_path: outputs/final_feature_list.json
+
+target_column: forecast_error
+date_column: date
+features_version: day18_pruned_from_restored_39
+
+splits:
+  strategy: chronological
+  validation_start: "2024-01-01"
+  test_start: "2025-01-01"
+
+ngboost:
+  distribution: Normal
+  natural_gradient: true
+  random_state: 42
+
+  # Default production-style training path used by `python -m src.train_ngboost`.
+  # Chosen from outputs/ngboost_current36_distribution_scale_grid.csv on
+  # chronological validation: Normal x1.00 had the best market-bucket Brier
+  # and the best rank-sum across continuous NLL + market-bucket Brier. Laplace
+  # won continuous NLL only, but did not win Brier.
+  standard_training:
+    selected_candidate: normal_current36_sigma_x100
+    distribution: Normal
+    sigma_scale: 1.0
+    n_estimators: 120
+    learning_rate: 0.05
+    max_depth: 2
+    min_samples_leaf: 50
+    minibatch_frac: 1.0
+    natural_gradient: true
+    random_state: 11
+    early_stopping_rounds: 20
+    validation_metrics:
+      nll: 1.286345
+      market_mean_bucket_brier: 0.077594
+      market_log_loss: 0.896128
+    test_diagnostics:
+      nll: 1.596138
+      market_mean_bucket_brier: 0.085388
+      market_log_loss: 1.011122
+    comparison_file: outputs/ngboost_current36_distribution_scale_grid.csv
+
+  tuning:
+    enabled: true
+    primary_metric: val_nll
+    selection_tolerance_nll: 0.02
+    refit_best_on_train_val: true
+
+    secondary_metrics:
+      - val_80_coverage
+      - val_90_coverage
+      - val_bucket_brier
+      - val_interval_log_loss
+      - val_calibration_error
+
+    grid:
+      - name: v1_reference_or_near_reference
+        n_estimators: 300
+        learning_rate: 0.03
+        max_depth: 2
+        min_samples_leaf: 20
+        minibatch_frac: 1.0
+
+      - name: more_trees_lower_lr
+        n_estimators: 500
+        learning_rate: 0.02
+        max_depth: 2
+        min_samples_leaf: 20
+        minibatch_frac: 1.0
+
+      - name: many_trees_low_lr
+        n_estimators: 700
+        learning_rate: 0.01
+        max_depth: 2
+        min_samples_leaf: 20
+        minibatch_frac: 1.0
+
+      - name: slightly_deeper
+        n_estimators: 500
+        learning_rate: 0.02
+        max_depth: 3
+        min_samples_leaf: 20
+        minibatch_frac: 1.0
+
+      - name: deeper_more_regularized
+        n_estimators: 700
+        learning_rate: 0.01
+        max_depth: 3
+        min_samples_leaf: 30
+        minibatch_frac: 1.0
+
+      - name: shallow_large_leaf
+        n_estimators: 500
+        learning_rate: 0.02
+        max_depth: 2
+        min_samples_leaf: 50
+        minibatch_frac: 1.0
+
+      - name: shallow_subsampled
+        n_estimators: 500
+        learning_rate: 0.02
+        max_depth: 2
+        min_samples_leaf: 50
+        minibatch_frac: 0.8
