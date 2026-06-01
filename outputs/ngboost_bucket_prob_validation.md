@@ -1,15 +1,15 @@
 # NGBoost Bucket Probability Validation
 
-- Generated at UTC: 2026-05-31T22:42:46.661440+00:00
+- Generated at UTC: 2026-06-01T01:26:09.972282+00:00
 - Source prediction file or model source: `C:\Weather Trading\Kalshi-Weather-Trading\outputs\ngboost_distribution_params_v0.csv`
 - Prediction rows priced: 20904
 - Probability rows generated: 125424
 - Buckets per prediction row: 6
 - Included splits: test, validation
-- Distribution type used: normal
+- Distribution type used: laplace
 - Bucket mode: kalshi_around_forecast_rounding_nearest
 - Min probability: 0
-- Max probability: 0.999991377408
+- Max probability: 0.998636445419
 - Mean row probability sum: 1
 - Max absolute deviation from row sum 1: 1.11022302463e-16
 - Number of invalid rows found: 0
@@ -21,61 +21,61 @@
 
 ```text
 forecast_high = 46
-error | X_t ~ normal(mu=-0.759827, scale=1.42195)
+error | X_t ~ laplace(mu=-1.51333, scale=1.64224)
 
 Final bucket:
-44.5 < final_high <= 46.5
+42.5 < final_high <= 44.5
 
 Convert to forecast-error interval:
--1.5 < error <= 0.5
+-3.5 < error <= -1.5
 
 Probability:
-P(-1.5 < error <= 0.5)
-= NormalCDF((0.5 - -0.759827) / 1.42195) - NormalCDF((-1.5 - -0.759827) / 1.42195)
-= 0.510842740062
+P(-3.5 < error <= -1.5)
+= LaplaceCDF((-1.5 - -1.51333) / 1.64224) - LaplaceCDF((-3.5 - -1.51333) / 1.64224)
+= 0.354902800698
 ```
 
 ### Example 2
 
 ```text
 forecast_high = 46
-error | X_t ~ normal(mu=-1.10292, scale=1.45076)
+error | X_t ~ laplace(mu=-1.67011, scale=1.64224)
 
 Final bucket:
-44.5 < final_high <= 46.5
+42.5 < final_high <= 44.5
 
 Convert to forecast-error interval:
--1.5 < error <= 0.5
+-3.5 < error <= -1.5
 
 Probability:
-P(-1.5 < error <= 0.5)
-= NormalCDF((0.5 - -1.10292) / 1.45076) - NormalCDF((-1.5 - -1.10292) / 1.45076)
-= 0.473238559971
+P(-3.5 < error <= -1.5)
+= LaplaceCDF((-1.5 - -1.67011) / 1.64224) - LaplaceCDF((-3.5 - -1.67011) / 1.64224)
+= 0.385121060252
 ```
 
 ### Example 3
 
 ```text
 forecast_high = 46
-error | X_t ~ normal(mu=-0.892646, scale=1.45076)
+error | X_t ~ laplace(mu=-1.62525, scale=1.64517)
 
 Final bucket:
-44.5 < final_high <= 46.5
+42.5 < final_high <= 44.5
 
 Convert to forecast-error interval:
--1.5 < error <= 0.5
+-3.5 < error <= -1.5
 
 Probability:
-P(-1.5 < error <= 0.5)
-= NormalCDF((0.5 - -0.892646) / 1.45076) - NormalCDF((-1.5 - -0.892646) / 1.45076)
-= 0.493718995675
+P(-3.5 < error <= -1.5)
+= LaplaceCDF((-1.5 - -1.62525) / 1.64517) - LaplaceCDF((-3.5 - -1.62525) / 1.64517)
+= 0.376670447475
 ```
 
 ### Example 4
 
 ```text
 forecast_high = 46
-error | X_t ~ normal(mu=-0.710999, scale=1.46819)
+error | X_t ~ laplace(mu=-1.49698, scale=1.73219)
 
 Final bucket:
 44.5 < final_high <= 46.5
@@ -85,15 +85,15 @@ Convert to forecast-error interval:
 
 Probability:
 P(-1.5 < error <= 0.5)
-= NormalCDF((0.5 - -0.710999) / 1.46819) - NormalCDF((-1.5 - -0.710999) / 1.46819)
-= 0.499766923142
+= LaplaceCDF((0.5 - -1.49698) / 1.73219) - LaplaceCDF((-1.5 - -1.49698) / 1.73219)
+= 0.343005727646
 ```
 
 ### Example 5
 
 ```text
 forecast_high = 46
-error | X_t ~ normal(mu=-0.812041, scale=1.4684)
+error | X_t ~ laplace(mu=-1.48995, scale=1.74925)
 
 Final bucket:
 44.5 < final_high <= 46.5
@@ -103,6 +103,6 @@ Convert to forecast-error interval:
 
 Probability:
 P(-1.5 < error <= 0.5)
-= NormalCDF((0.5 - -0.812041) / 1.4684) - NormalCDF((-1.5 - -0.812041) / 1.4684)
-= 0.494499413389
+= LaplaceCDF((0.5 - -1.48995) / 1.74925) - LaplaceCDF((-1.5 - -1.48995) / 1.74925)
+= 0.342569765715
 ```

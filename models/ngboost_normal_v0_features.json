@@ -1,5 +1,5 @@
 {
-  "model_name": "ngboost_normal_v0",
+  "model_name": "ngboost_laplace_v0",
   "target": "forecast_error",
   "feature_columns": [
     "day_of_year_sin",
@@ -40,7 +40,8 @@
     "minutes_until_typical_peak"
   ],
   "feature_count": 36,
-  "distribution_type": "normal",
+  "distribution_type": "laplace",
+  "sigma_scale": 1.3,
   "source_feature_spec": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\final_feature_list.json",
   "imputation_strategy": "median fit on train only"
 }

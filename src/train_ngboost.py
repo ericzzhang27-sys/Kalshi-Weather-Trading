@@ -206,9 +206,12 @@ def run_standard_training(args: argparse.Namespace) -> None:
     validation_details = predict_distribution_details(model, X_validation, distribution)
     test_details = predict_distribution_details(model, X_test, distribution)
     validation_mu = np.asarray(validation_details["mu"], dtype=float)
-    validation_sigma = np.asarray(validation_details["sigma"], dtype=float)
+    raw_validation_sigma = np.asarray(validation_details["sigma"], dtype=float)
     test_mu = np.asarray(test_details["mu"], dtype=float)
-    test_sigma = np.asarray(test_details["sigma"], dtype=float)
+    raw_test_sigma = np.asarray(test_details["sigma"], dtype=float)
+    sigma_scale = float(standard_config["sigma_scale"])
+    validation_sigma = raw_validation_sigma * sigma_scale
+    test_sigma = raw_test_sigma * sigma_scale
 
     validation_nll = distribution_nll(
         y_validation,
@@ -278,6 +281,9 @@ def run_standard_training(args: argparse.Namespace) -> None:
         ignore_index=True,
     )
     predictions.insert(0, "row_id", np.arange(len(predictions), dtype=int))
+    predictions["sigma_scale"] = sigma_scale
+    if not np.isclose(sigma_scale, 1.0):
+        predictions["raw_sigma"] = np.concatenate([raw_validation_sigma, raw_test_sigma])
     if len(predictions) != len(validation_df) + len(test_df):
         raise AssertionError("Distribution prediction count does not match validation/test rows")
 
@@ -288,6 +294,7 @@ def run_standard_training(args: argparse.Namespace) -> None:
     metrics = build_metrics(
         model_name=model_name,
         distribution_type=distribution,
+        sigma_scale=sigma_scale,
         split_summary=split_summary,
         feature_columns=feature_columns,
         validation_nll=validation_nll,
@@ -307,6 +314,7 @@ def run_standard_training(args: argparse.Namespace) -> None:
         feature_columns=feature_columns,
         model_name=model_name,
         distribution_type=distribution,
+        sigma_scale=sigma_scale,
         split_summary=split_summary,
         preprocessing_notes=preprocessing_notes,
         predictions=predictions,
@@ -412,8 +420,13 @@ def standard_training_config(config: dict[str, Any], args: argparse.Namespace) -
         if early_stopping <= 0:
             early_stopping = None
 
+    sigma_scale = float(standard.get("sigma_scale", 1.0))
+    if not math.isfinite(sigma_scale) or sigma_scale <= 0.0:
+        raise ValueError(f"ngboost.standard_training.sigma_scale must be positive, got {sigma_scale!r}")
+
     return {
         "distribution": normalize_distribution_name(str(distribution_source)),
+        "sigma_scale": sigma_scale,
         "n_estimators": int(standard.get("n_estimators", 120)),
         "learning_rate": float(standard.get("learning_rate", 0.05)),
         "max_depth": int(standard.get("max_depth", 2)),
@@ -1857,6 +1870,7 @@ def build_prediction_frame(
 def build_metrics(
     model_name: str,
     distribution_type: str,
+    sigma_scale: float,
     split_summary: dict[str, Any],
     feature_columns: list[str],
     validation_nll: np.ndarray,
@@ -1873,6 +1887,7 @@ def build_metrics(
         "model_name": model_name,
         "target_name": TARGET_COLUMN,
         "distribution_type": normalize_distribution_name(distribution_type),
+        "sigma_scale": float(sigma_scale),
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "split_summary": split_summary,
         "train_date_range": split_summary["splits"]["train"],
@@ -1948,6 +1963,7 @@ def write_outputs(
     feature_columns: list[str],
     model_name: str,
     distribution_type: str,
+    sigma_scale: float,
     split_summary: dict[str, Any],
     preprocessing_notes: dict[str, Any],
     predictions: pd.DataFrame,
@@ -1964,6 +1980,7 @@ def write_outputs(
         "target": TARGET_COLUMN,
         "model_name": model_name,
         "distribution_type": normalize_distribution_name(distribution_type),
+        "sigma_scale": float(sigma_scale),
         "split_summary": split_summary,
         "preprocessing_notes": preprocessing_notes,
     }
@@ -1976,6 +1993,7 @@ def write_outputs(
         "feature_columns": feature_columns,
         "feature_count": len(feature_columns),
         "distribution_type": normalize_distribution_name(distribution_type),
+        "sigma_scale": float(sigma_scale),
         "source_feature_spec": str(feature_columns_path),
         "imputation_strategy": preprocessing_notes["imputation_strategy"],
     }
@@ -2021,6 +2039,7 @@ def print_report(
         f"max_depth={standard_config['max_depth']}, "
         f"min_samples_leaf={standard_config['min_samples_leaf']}, "
         f"minibatch_frac={standard_config['minibatch_frac']}, "
+        f"sigma_scale={standard_config['sigma_scale']}, "
         f"natural_gradient={standard_config['natural_gradient']}, "
         f"random_state={standard_config['random_state']}, "
         f"early_stopping_rounds={standard_config['early_stopping_rounds']}"

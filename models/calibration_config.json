@@ -1,34 +1,34 @@
 {
   "model_name": "ngboost_calibrated_v3",
   "base_model": "ngboost_distribution_params_v0.csv",
-  "base_distribution_type": "normal",
+  "base_distribution_type": "laplace",
   "calibration_method": "global_sigma_scaling",
-  "alpha": 0.9,
+  "alpha": 0.7,
   "fit_split": "validation",
   "selection_metric": "validation_nll_with_coverage_check",
   "selection_details": {
     "selection_rule": "validation-only alpha search; eligible alphas must be within 0.0200 NLL of raw alpha=1.0, then minimize absolute validation coverage gaps, with validation NLL and bucket log loss as tie-breakers",
-    "raw_validation_nll": 1.2863447155885703,
-    "eligible_alpha_count": 6,
-    "selected_validation_nll": 1.302853586068838,
-    "selected_coverage_penalty": 0.04173497267759563
+    "raw_validation_nll": 1.1931149214619803,
+    "eligible_alpha_count": 8,
+    "selected_validation_nll": 1.1275930787776638,
+    "selected_coverage_penalty": 0.04489981785063757
   },
   "selected_validation_metrics": {
-    "alpha": 0.9,
-    "validation_nll": 1.302853586068838,
-    "coverage_50": 0.50591985428051,
-    "coverage_gap_50": 0.005919854280510006,
-    "coverage_80": 0.7979280510018215,
-    "coverage_gap_80": -0.00207194899817853,
-    "coverage_90": 0.8878642987249544,
-    "coverage_gap_90": -0.012135701275045596,
-    "coverage_95": 0.9283925318761385,
-    "coverage_gap_95": -0.021607468123861495,
-    "coverage_penalty": 0.04173497267759563,
-    "selection_score": 1.3132873292382368,
-    "bucket_brier": 0.07763315683501097,
-    "bucket_log_loss": 0.9128655511178512,
-    "distance_from_raw_alpha": 0.09999999999999998,
+    "alpha": 0.7,
+    "validation_nll": 1.1275930787776638,
+    "coverage_50": 0.5132058287795993,
+    "coverage_gap_50": 0.013205828779599305,
+    "coverage_80": 0.8152322404371585,
+    "coverage_gap_80": 0.015232240437158429,
+    "coverage_90": 0.9121129326047359,
+    "coverage_gap_90": 0.012112932604735893,
+    "coverage_95": 0.9543488160291439,
+    "coverage_gap_95": 0.004348816029143943,
+    "coverage_penalty": 0.04489981785063757,
+    "selection_score": 1.1388180332403233,
+    "bucket_brier": 0.07912956337799862,
+    "bucket_log_loss": 0.9189199706243987,
+    "distance_from_raw_alpha": 0.30000000000000004,
     "selected": true
   },
   "split_summary": {
@@ -68,5 +68,5 @@
   ],
   "test_set_used_for_alpha_selection": false,
   "notes": "Alpha selected using validation only. Test set used only for final before/after reporting; do not tune alpha or group-specific calibration from test results.",
-  "created_at_utc": "2026-05-31T22:43:03.143421+00:00"
+  "created_at_utc": "2026-06-01T01:27:26.294292+00:00"
 }

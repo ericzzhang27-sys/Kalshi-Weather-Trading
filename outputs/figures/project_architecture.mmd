@@ -1,0 +1,14 @@
+flowchart LR
+    raw_obs[Raw hourly observations] --> loader[Data loaders]
+    raw_fcst[Raw forecast data] --> loader
+    loader --> targets[Target builder]
+    targets --> features[Feature builder]
+    features --> leakage[Leakage checks]
+    leakage --> splits[Chronological split]
+    splits --> model[NGBoost distribution model]
+    model --> params[Distribution params: mu, sigma]
+    params --> buckets[Bucket converter / CDF differencing]
+    buckets --> eval[Evaluation and calibration]
+    buckets --> edge[Edge scanner]
+    eval --> outputs[Reports and figures]
+    edge --> outputs

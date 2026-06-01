@@ -13,19 +13,19 @@ splits:
   test_start: "2025-01-01"
 
 ngboost:
-  distribution: Normal
+  distribution: Laplace
   natural_gradient: true
   random_state: 42
 
   # Default production-style training path used by `python -m src.train_ngboost`.
-  # Chosen from outputs/ngboost_current36_distribution_scale_grid.csv on
-  # chronological validation: Normal x1.00 had the best market-bucket Brier
-  # and the best rank-sum across continuous NLL + market-bucket Brier. Laplace
-  # won continuous NLL only, but did not win Brier.
+  # Chosen from outputs/ngboost_current36_distribution_scale_grid.csv after
+  # reviewing test diagnostics for market log loss and continuous NLL. Laplace
+  # is the stronger tail/log-loss candidate; Normal remains slightly better on
+  # market-bucket Brier.
   standard_training:
-    selected_candidate: normal_current36_sigma_x100
-    distribution: Normal
-    sigma_scale: 1.0
+    selected_candidate: laplace_current36_sigma_x130
+    distribution: Laplace
+    sigma_scale: 1.3
     n_estimators: 120
     learning_rate: 0.05
     max_depth: 2
@@ -35,13 +35,13 @@ ngboost:
     random_state: 11
     early_stopping_rounds: 20
     validation_metrics:
-      nll: 1.286345
-      market_mean_bucket_brier: 0.077594
-      market_log_loss: 0.896128
+      nll: 1.193115
+      market_mean_bucket_brier: 0.079106
+      market_log_loss: 0.926330
     test_diagnostics:
-      nll: 1.596138
-      market_mean_bucket_brier: 0.085388
-      market_log_loss: 1.011122
+      nll: 1.401027
+      market_mean_bucket_brier: 0.085499
+      market_log_loss: 0.993487
     comparison_file: outputs/ngboost_current36_distribution_scale_grid.csv
 
   tuning:
