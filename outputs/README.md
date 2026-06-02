@@ -16,6 +16,7 @@ Most files in this directory are reproducible outputs rather than hand-written s
 | `day10_distribution_pricing/` | Bucket-boundary conversion examples and interval-probability demos. |
 | `day17_feature_lists/` | Candidate feature lists used for ablations and final-safe feature selection. |
 | `figures/` | Generated plots and presentation images. |
+| `live_trading/` | Read-only Kalshi market-discovery snapshots and future live/paper trading logs. |
 | `visuals/` | Reserved visual-artifact folder. |
 
 ## Core Current Artifacts
@@ -23,12 +24,18 @@ Most files in this directory are reproducible outputs rather than hand-written s
 | File | Purpose |
 |---|---|
 | `final_feature_list.json` | Selected model feature list used by the current NGBoost training path. |
-| `ngboost_distribution_params_v0.csv` | One distribution prediction per validation/test timestamp, including `mu`, `sigma`, split, forecast high, actual high, and realized forecast error. |
+| `ngboost_distribution_params_v0.csv` | One Laplace distribution prediction per validation/test timestamp, including `mu`, `sigma`, split, forecast high, actual high, and realized forecast error. |
 | `ngboost_nll_v0.json` | Training metadata, split summary, feature list, NLL metrics, and preprocessing notes. |
-| `ngboost_bucket_probs_v0.csv` | Long-format bucket probabilities derived from the model CDF. |
+| `ngboost_bucket_probs_v0.csv` | Long-format bucket probabilities derived from the default Laplace model CDF. |
 | `ngboost_bucket_probs_validation_v0.csv` | Validation split subset of bucket probabilities. |
 | `ngboost_bucket_probs_test_v0.csv` | Test split subset of bucket probabilities. |
 | `ngboost_bucket_prob_validation.md` | Probability coherence report for bucket probabilities. |
+| `interval_probability_validation.csv` | Day 19 hand-checkable interval conversion cases with CDF bounds, computed probabilities, and row-sum checks. |
+| `sample_bucket_predictions.csv` | Day 19 sample long-format final-temperature bucket probabilities generated from NGBoost distribution parameters. |
+| `final_bucket_probability_predictions.csv` | Day 20 final probability-engine output from processed feature rows through calibrated NGBoost bucket pricing. |
+| `prediction_schema.md` | Day 20 prediction input/output schema, validation rules, and run diagnostics for the final probability engine. |
+| `live_trading/market_discovery_snapshot.csv` | Day 21 read-only Kalshi weather market discovery snapshot with lifecycle, pricing, and rules fields. |
+| `live_trading/market_discovery_raw.json` | Raw matched Kalshi market payloads used to create the discovery snapshot. |
 | `ngboost_evaluation_report.csv` | Summary evaluation metrics for NGBoost and empirical baseline comparisons. |
 | `coverage_report.csv` | Interval coverage by split and nominal coverage level. |
 | `standardized_residual_summary.csv` | Residual diagnostics by split. |
@@ -63,6 +70,8 @@ Most files in this directory are reproducible outputs rather than hand-written s
 | `ngboost_current36_distribution_scale_grid.csv` | Scale-grid comparison for current 36-feature candidates. |
 | `ngboost_pruned_candidate_comparison.csv` | Comparison table for pruned candidate feature/model variants. |
 | `ngboost_hyperparameter_search.csv` | NGBoost tuning search output. |
+| `model_search/ngboost_model_space_search.csv` | Validation/test diagnostics for safe feature, distribution, hyperparameter, and sigma-scale model-space search. |
+| `model_search/ngboost_model_space_best_summary.md` | Summary of validation-only winner, diagnostic test winners, heavy-tail probes, and overfitting guardrails. |
 | `best_ngboost_v2_notes.md` | Notes on selected v2 NGBoost candidate. |
 | `best_model_notes.md` | Notes on broader model selection. |
 | `model_selection_metrics.md` | Model selection metric summary. |
@@ -147,5 +156,5 @@ jupyter notebook notebooks/project_walkthrough.ipynb
 ## Notes
 
 - Outputs are timestamped or versioned by workflow stage in some places, but not all files include a run ID.
-- Some artifacts have historical names, such as `ngboost_normal_v0`, even when the current configured distribution is Laplace.
+- The default prediction-engine model is `models/ngboost_laplace_current36_default.pkl`; older `ngboost_normal_v0` names are historical aliases and should not be treated as the configured model family.
 - Do not treat any single output table as a live-trading signal without timestamp-correct market prices, executable bid/ask data, fees, slippage assumptions, and settlement-rule validation.

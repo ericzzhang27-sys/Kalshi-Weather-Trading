@@ -1,0 +1,3 @@
+run_id,status,feature_set,feature_count,distribution,hyperparams_name,n_estimators,learning_rate,max_depth,min_samples_leaf,minibatch_frac,natural_gradient,random_state,early_stopping_rounds,elapsed_seconds,error_message
+current36__laplace__standard_120_lr005_leaf20,success,current36,36,laplace,standard_120_lr005_leaf20,120,0.05,2,20,1.0,True,11,20,17.45945540000139,
+current36__laplace__medium_300_lr003_leaf50,success,current36,36,laplace,medium_300_lr003_leaf50,300,0.03,2,50,1.0,True,11,20,22.349076100001184,

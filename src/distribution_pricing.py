@@ -22,9 +22,9 @@ try:
         validate_temperature_buckets,
     )
     from .interval_probs import (
+        bucket_probabilities_from_cdf,
         final_bucket_to_error_bounds,
         interval_probability,
-        normalize_probabilities,
     )
     from .error_boundaries import convert_nws_to_boundaries
     from .distributional_model import distribution_cdf, normalize_distribution_name
@@ -37,9 +37,9 @@ except ImportError:
         validate_temperature_buckets,
     )
     from interval_probs import (
+        bucket_probabilities_from_cdf,
         final_bucket_to_error_bounds,
         interval_probability,
-        normalize_probabilities,
     )
     from error_boundaries import convert_nws_to_boundaries
     from distributional_model import distribution_cdf, normalize_distribution_name
@@ -394,38 +394,13 @@ def price_temperature_buckets_from_cdf(
     """
     Price final-temperature buckets from any forecast-error CDF callable.
     """
-    error_buckets = convert_temperature_buckets_to_error_buckets(
+    validate_temperature_buckets(buckets)
+    return bucket_probabilities_from_cdf(
         buckets=buckets,
         forecast_high=forecast_high,
+        cdf=cdf,
+        normalize=normalize,
     )
-
-    probabilities = [
-        interval_probability(cdf, bucket.lower_error, bucket.upper_error)
-        for bucket in error_buckets
-    ]
-    if normalize:
-        probabilities = normalize_probabilities(probabilities)
-
-    forecast = _validate_forecast_high(forecast_high)
-    rows: list[dict[str, float | str | None]] = []
-    for temperature_bucket, error_bucket, probability in zip(
-        buckets,
-        error_buckets,
-        probabilities,
-    ):
-        rows.append(
-            {
-                "bucket": temperature_bucket.label,
-                "lower_temp": temperature_bucket.lower_temp,
-                "upper_temp": temperature_bucket.upper_temp,
-                "forecast_high": forecast,
-                "lower_error": error_bucket.lower_error,
-                "upper_error": error_bucket.upper_error,
-                "probability": float(probability),
-            }
-        )
-
-    return rows
 
 
 def _bucket_label(bucket: Bucket | TemperatureBucket | dict[str, Any], index: int) -> str:

@@ -1,0 +1,52 @@
+mode: shadow
+trading_enabled: false
+live_auto_enabled: false
+
+kalshi:
+  env: demo
+  demo_base_url: https://external-api.demo.kalshi.co/trade-api/v2
+  production_base_url: https://external-api.kalshi.com/trade-api/v2
+  request_timeout_seconds: 15
+  max_retries: 2
+  retry_backoff_seconds: 0.5
+  allow_public_market_data_without_auth: true
+
+markets:
+  default_location: NYC
+  supported_locations:
+    - NYC
+  target_market_type: daily_high_temperature
+  supported_market_types:
+    - daily_high_temperature
+  status: open
+  tradable_statuses:
+    - open
+    - active
+  min_minutes_to_close: 30
+  page_limit: 1000
+  max_pages: 5
+  # Kalshi's market-data quick start documents KXHIGHNY as the NYC daily-high
+  # temperature series.
+  series_tickers:
+    NYC:
+      - KXHIGHNY
+  location_terms:
+    NYC:
+      - NYC
+      - New York
+      - New York City
+      - Central Park
+  weather_terms:
+    - temperature
+    - high temperature
+    - high temp
+    - daily high
+    - weather
+
+risk:
+  kill_switch_path: runtime/KILL_SWITCH_TRADING
+
+outputs:
+  live_trading_dir: outputs/live_trading
+  market_discovery_snapshot_path: outputs/live_trading/market_discovery_snapshot.csv
+  market_discovery_raw_path: outputs/live_trading/market_discovery_raw.json

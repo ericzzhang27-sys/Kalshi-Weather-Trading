@@ -7,9 +7,17 @@ import pandas as pd
 
 try:
     from .calibration import apply_sigma_scaling
+    from .distribution_pricing import (
+        infer_prediction_distribution_type,
+        price_buckets_for_dataframe,
+    )
     from .distributional_model import predict_distribution_details
 except ImportError:
     from calibration import apply_sigma_scaling
+    from distribution_pricing import (
+        infer_prediction_distribution_type,
+        price_buckets_for_dataframe,
+    )
     from distributional_model import predict_distribution_details
 
 
@@ -38,6 +46,7 @@ def predict_distribution_params(
     model: Any,
     X: pd.DataFrame,
     metadata: pd.DataFrame | dict[str, Any] | None = None,
+    distribution: str | None = None,
 ) -> pd.DataFrame:
     """
     Return one standardized distribution-parameter row per prediction state.
@@ -46,7 +55,7 @@ def predict_distribution_params(
     raw arrays and distribution metadata for training/evaluation code. This
     wrapper is the CSV/export shape used by downstream bucket pricing.
     """
-    details = predict_distribution_details(model, X)
+    details = predict_distribution_details(model, X, distribution=distribution)
     mu = details["mu"]
     sigma = details["sigma"]
     mu_array = np.asarray(mu, dtype=float)
@@ -105,3 +114,28 @@ def apply_sigma_scaling_to_predictions(
     result[output_sigma_col] = apply_sigma_scaling(result[sigma_col], alpha)
     result["sigma_scaling_alpha"] = float(alpha)
     return result
+
+
+def predict_bucket_probabilities(
+    model: Any,
+    X: pd.DataFrame,
+    metadata: pd.DataFrame | dict[str, Any] | None = None,
+    buckets: list[Any] | None = None,
+    dist_type: str = "auto",
+    forecast_rounding: str = "nearest",
+) -> pd.DataFrame:
+    """
+    Predict forecast-error distribution params and price final-temperature buckets.
+
+    The returned frame is long-format: one row per prediction state per bucket,
+    with final-temperature bounds, converted forecast-error bounds, and the
+    bucket probability computed as F(upper_error) - F(lower_error).
+    """
+    predictions = predict_distribution_params(model, X, metadata=metadata)
+    inferred_dist = infer_prediction_distribution_type(predictions, dist_type)
+    return price_buckets_for_dataframe(
+        predictions,
+        buckets=buckets,
+        dist_type=inferred_dist,
+        forecast_rounding=forecast_rounding,
+    )

@@ -176,6 +176,18 @@ def validate_temperature_buckets(buckets: list[TemperatureBucket]) -> None:
     _validate_contiguous_temperature_intervals(intervals)
 
 
+def integer_temperature_bucket_bounds(temperature: int) -> tuple[float, float]:
+    """
+    Return half-degree settlement boundaries for one integer temperature.
+
+    The project uses lower-open, upper-closed buckets, so integer N maps to
+    N - 0.5 < actual_high <= N + 0.5.
+    """
+    if not isinstance(temperature, int):
+        raise TypeError("temperature must be an integer")
+    return temperature - 0.5, temperature + 0.5
+
+
 def make_integer_temperature_buckets(min_temp: int, max_temp: int) -> list[TemperatureBucket]:
     """
     Build one-degree settlement buckets with half-degree boundaries.
@@ -189,27 +201,30 @@ def make_integer_temperature_buckets(min_temp: int, max_temp: int) -> list[Tempe
     if min_temp >= max_temp:
         raise ValueError("min_temp must be less than max_temp")
 
+    _, lower_tail_upper = integer_temperature_bucket_bounds(min_temp)
     buckets = [
         TemperatureBucket(
             label=f"{min_temp} or lower",
             lower_temp=None,
-            upper_temp=min_temp + 0.5,
+            upper_temp=lower_tail_upper,
         )
     ]
 
     for temperature in range(min_temp + 1, max_temp):
+        lower_temp, upper_temp = integer_temperature_bucket_bounds(temperature)
         buckets.append(
             TemperatureBucket(
                 label=str(temperature),
-                lower_temp=temperature - 0.5,
-                upper_temp=temperature + 0.5,
+                lower_temp=lower_temp,
+                upper_temp=upper_temp,
             )
         )
 
+    upper_tail_lower, _ = integer_temperature_bucket_bounds(max_temp)
     buckets.append(
         TemperatureBucket(
             label=f"{max_temp} or higher",
-            lower_temp=max_temp - 0.5,
+            lower_temp=upper_tail_lower,
             upper_temp=None,
         )
     )
