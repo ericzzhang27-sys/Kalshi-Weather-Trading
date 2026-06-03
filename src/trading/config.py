@@ -63,11 +63,45 @@ class OutputSettings:
     live_trading_dir: Path
     market_discovery_snapshot_path: Path
     market_discovery_raw_path: Path
+    contract_bucket_mapping_path: Path
+    live_weather_snapshot_path: Path
+    live_feature_rows_path: Path
+    live_feature_freshness_path: Path
 
 
 @dataclass(frozen=True)
 class RiskSettings:
     kill_switch_path: Path
+
+
+@dataclass(frozen=True)
+class WeatherGridSettings:
+    latitude: float
+    longitude: float
+
+
+@dataclass(frozen=True)
+class LiveWeatherSettings:
+    provider: str = "open_meteo"
+    forecast_base_url: str = "https://api.open-meteo.com/v1/forecast"
+    timezone: str = "America/New_York"
+    temperature_unit: str = "fahrenheit"
+    wind_speed_unit: str = "mph"
+    precipitation_unit: str = "inch"
+    observation_grid: WeatherGridSettings = WeatherGridSettings(
+        latitude=40.808434,
+        longitude=-74.0199,
+    )
+    forecast_grid: WeatherGridSettings = WeatherGridSettings(
+        latitude=40.78858,
+        longitude=-73.9661,
+    )
+    observed_past_hours: int = 12
+    forecast_past_hours: int = 12
+    forecast_days: int = 2
+    max_observation_age_minutes: int = 90
+    max_forecast_age_minutes: int = 180
+    require_forecast_issue_time: bool = False
 
 
 @dataclass(frozen=True)
@@ -77,6 +111,7 @@ class TradingConfig:
     live_auto_enabled: bool
     kalshi: KalshiSettings
     markets: MarketSettings
+    weather: LiveWeatherSettings
     outputs: OutputSettings
     risk: RiskSettings
 
@@ -99,6 +134,7 @@ def parse_trading_config(raw: dict[str, Any]) -> TradingConfig:
 
     kalshi = _parse_kalshi_settings(raw.get("kalshi", {}))
     markets = _parse_market_settings(raw.get("markets", {}))
+    weather = _parse_live_weather_settings(raw.get("weather", {}))
     outputs = _parse_output_settings(raw.get("outputs", {}))
     risk = _parse_risk_settings(raw.get("risk", {}))
 
@@ -108,6 +144,7 @@ def parse_trading_config(raw: dict[str, Any]) -> TradingConfig:
         live_auto_enabled=live_auto_enabled,
         kalshi=kalshi,
         markets=markets,
+        weather=weather,
         outputs=outputs,
         risk=risk,
     )
@@ -140,6 +177,14 @@ def validate_trading_config(config: TradingConfig) -> None:
         raise TradingConfigError("markets.page_limit must be between 1 and 1000")
     if config.markets.max_pages < 1:
         raise TradingConfigError("markets.max_pages must be positive")
+    if config.weather.provider != "open_meteo":
+        raise TradingConfigError("weather.provider must be open_meteo")
+    if config.weather.observed_past_hours < 1:
+        raise TradingConfigError("weather.observed_past_hours must be positive")
+    if config.weather.forecast_past_hours < 1:
+        raise TradingConfigError("weather.forecast_past_hours must be positive")
+    if config.weather.forecast_days < 1:
+        raise TradingConfigError("weather.forecast_days must be positive")
 
 
 def _parse_kalshi_settings(raw: Any) -> KalshiSettings:
@@ -204,6 +249,30 @@ def _parse_output_settings(raw: Any) -> OutputSettings:
                 "outputs/live_trading/market_discovery_raw.json",
             )
         ),
+        contract_bucket_mapping_path=_repo_path(
+            data.get(
+                "contract_bucket_mapping_path",
+                "outputs/live_trading/contract_bucket_mapping.csv",
+            )
+        ),
+        live_weather_snapshot_path=_repo_path(
+            data.get(
+                "live_weather_snapshot_path",
+                "outputs/live_trading/live_weather_snapshot.csv",
+            )
+        ),
+        live_feature_rows_path=_repo_path(
+            data.get(
+                "live_feature_rows_path",
+                "outputs/live_trading/live_feature_rows.csv",
+            )
+        ),
+        live_feature_freshness_path=_repo_path(
+            data.get(
+                "live_feature_freshness_path",
+                "outputs/live_trading/live_feature_freshness.csv",
+            )
+        ),
     )
 
 
@@ -211,6 +280,58 @@ def _parse_risk_settings(raw: Any) -> RiskSettings:
     data = _mapping(raw, "risk")
     return RiskSettings(
         kill_switch_path=_repo_path(data.get("kill_switch_path", "runtime/KILL_SWITCH_TRADING"))
+    )
+
+
+def _parse_live_weather_settings(raw: Any) -> LiveWeatherSettings:
+    data = _mapping(raw, "weather")
+    observation_grid = _parse_weather_grid(
+        data.get(
+            "observation_grid",
+            {
+                "latitude": 40.808434,
+                "longitude": -74.0199,
+            },
+        ),
+        "weather.observation_grid",
+    )
+    forecast_grid = _parse_weather_grid(
+        data.get(
+            "forecast_grid",
+            {
+                "latitude": 40.78858,
+                "longitude": -73.9661,
+            },
+        ),
+        "weather.forecast_grid",
+    )
+    return LiveWeatherSettings(
+        provider=str(data.get("provider", "open_meteo")).strip(),
+        forecast_base_url=str(
+            data.get("forecast_base_url", "https://api.open-meteo.com/v1/forecast")
+        ).rstrip("/"),
+        timezone=str(data.get("timezone", "America/New_York")).strip(),
+        temperature_unit=str(data.get("temperature_unit", "fahrenheit")).strip(),
+        wind_speed_unit=str(data.get("wind_speed_unit", "mph")).strip(),
+        precipitation_unit=str(data.get("precipitation_unit", "inch")).strip(),
+        observation_grid=observation_grid,
+        forecast_grid=forecast_grid,
+        observed_past_hours=int(data.get("observed_past_hours", 12)),
+        forecast_past_hours=int(data.get("forecast_past_hours", 12)),
+        forecast_days=int(data.get("forecast_days", 2)),
+        max_observation_age_minutes=int(data.get("max_observation_age_minutes", 90)),
+        max_forecast_age_minutes=int(data.get("max_forecast_age_minutes", 180)),
+        require_forecast_issue_time=bool(data.get("require_forecast_issue_time", False)),
+    )
+
+
+def _parse_weather_grid(raw: Any, name: str) -> WeatherGridSettings:
+    data = _mapping(raw, name)
+    if "latitude" not in data or "longitude" not in data:
+        raise TradingConfigError(f"{name} must include latitude and longitude")
+    return WeatherGridSettings(
+        latitude=float(data["latitude"]),
+        longitude=float(data["longitude"]),
     )
 
 

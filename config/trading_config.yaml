@@ -43,6 +43,27 @@ markets:
     - daily high
     - weather
 
+weather:
+  provider: open_meteo
+  forecast_base_url: https://api.open-meteo.com/v1/forecast
+  timezone: America/New_York
+  temperature_unit: fahrenheit
+  wind_speed_unit: mph
+  precipitation_unit: inch
+  # Existing source grids from the Open-Meteo raw/forecast exports.
+  observation_grid:
+    latitude: 40.808434
+    longitude: -74.0199
+  forecast_grid:
+    latitude: 40.78858
+    longitude: -73.9661
+  observed_past_hours: 12
+  forecast_past_hours: 12
+  forecast_days: 2
+  max_observation_age_minutes: 90
+  max_forecast_age_minutes: 180
+  require_forecast_issue_time: false
+
 risk:
   kill_switch_path: runtime/KILL_SWITCH_TRADING
 
@@ -50,3 +71,7 @@ outputs:
   live_trading_dir: outputs/live_trading
   market_discovery_snapshot_path: outputs/live_trading/market_discovery_snapshot.csv
   market_discovery_raw_path: outputs/live_trading/market_discovery_raw.json
+  contract_bucket_mapping_path: outputs/live_trading/contract_bucket_mapping.csv
+  live_weather_snapshot_path: outputs/live_trading/live_weather_snapshot.csv
+  live_feature_rows_path: outputs/live_trading/live_feature_rows.csv
+  live_feature_freshness_path: outputs/live_trading/live_feature_freshness.csv
