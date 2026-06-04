@@ -299,7 +299,7 @@ def _render_orderbook(st, px, state: DashboardState) -> None:
 
 def _render_edge(st, state: DashboardState) -> None:
     st.subheader("Edge Table")
-    edge = state.edge_table.copy()
+    edge = getattr(state, "edge_table", pd.DataFrame()).copy()
     if edge.empty:
         st.info("No edge table is available yet.")
         return
@@ -461,6 +461,8 @@ def _render_weather(st, px, state: DashboardState, config) -> None:
 
 def _render_artifacts(st, state: DashboardState) -> None:
     st.subheader("Audit Artifacts")
+    orderbook_summary = getattr(state, "orderbook_summary", pd.DataFrame())
+    edge_table = getattr(state, "edge_table", pd.DataFrame())
     artifacts = {
         "dashboard_status.json": pd.DataFrame([state.status]).to_json(indent=2),
         "bucket_board.csv": state.bucket_board.to_csv(index=False),
@@ -470,8 +472,8 @@ def _render_artifacts(st, state: DashboardState) -> None:
         "live_feature_freshness.csv": state.feature_freshness.to_csv(index=False),
         "live_bucket_probabilities.csv": state.bucket_probabilities.to_csv(index=False),
         "orderbook_snapshot.csv": state.orderbook.to_csv(index=False),
-        "orderbook_summary.csv": state.orderbook_summary.to_csv(index=False),
-        "edge_table.csv": state.edge_table.to_csv(index=False),
+        "orderbook_summary.csv": orderbook_summary.to_csv(index=False),
+        "edge_table.csv": edge_table.to_csv(index=False),
     }
     for name, payload in artifacts.items():
         mime = "application/json" if name.endswith(".json") else "text/csv"
