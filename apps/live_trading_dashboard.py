@@ -393,8 +393,48 @@ def _render_weather(st, px, state: DashboardState, config) -> None:
             color="series",
             markers=True,
             title=f"Event-Date Temperature Path ({target_date or 'target date unknown'})",
-            labels={"temperature_2m": "Temperature (F)", "timestamp": "Local time"},
+            labels={"temperature_2m": "Temperature / high (F)", "timestamp": "Local time"},
         )
+        high_so_far = _weather_trace_frame(
+            obs_target,
+            value_col="observed_high_so_far",
+            series_name="Observed high so far",
+        )
+        if not high_so_far.empty:
+            chart.add_scatter(
+                x=high_so_far["timestamp"],
+                y=high_so_far["value"],
+                mode="lines+markers",
+                name="Observed high so far",
+                line=dict(dash="dash", shape="hv"),
+                marker=dict(size=7),
+            )
+        six_hour_max = _weather_trace_frame(
+            obs_target,
+            value_col="nws_6h_max_temp",
+            series_name="NWS 6h max remark",
+        )
+        if not six_hour_max.empty:
+            chart.add_scatter(
+                x=six_hour_max["timestamp"],
+                y=six_hour_max["value"],
+                mode="markers",
+                name="NWS 6h max remark",
+                marker=dict(symbol="diamond", size=11),
+            )
+        daily_max = _weather_trace_frame(
+            obs_target,
+            value_col="nws_24h_max_temp",
+            series_name="NWS 24h max remark",
+        )
+        if not daily_max.empty:
+            chart.add_scatter(
+                x=daily_max["timestamp"],
+                y=daily_max["value"],
+                mode="markers",
+                name="NWS 24h max remark",
+                marker=dict(symbol="star", size=13),
+            )
         chart.update_layout(height=430, margin=dict(l=10, r=10, t=55, b=45))
         st.plotly_chart(chart, use_container_width=True)
     if not daily.empty:
@@ -611,6 +651,21 @@ def _weather_display_columns(frame: pd.DataFrame, columns: list[str]) -> pd.Data
     if not present:
         return frame
     return frame.loc[:, present].copy()
+
+
+def _weather_trace_frame(
+    frame: pd.DataFrame,
+    *,
+    value_col: str,
+    series_name: str,
+) -> pd.DataFrame:
+    if frame.empty or not {"timestamp", value_col}.issubset(frame.columns):
+        return pd.DataFrame(columns=["timestamp", "value", "series"])
+    trace = frame[["timestamp", value_col]].copy()
+    trace["timestamp"] = pd.to_datetime(trace["timestamp"], errors="coerce")
+    trace["value"] = pd.to_numeric(trace[value_col], errors="coerce")
+    trace["series"] = series_name
+    return trace.dropna(subset=["timestamp", "value"])[["timestamp", "value", "series"]]
 
 
 def _render_weather_source_summary(st, config) -> None:
