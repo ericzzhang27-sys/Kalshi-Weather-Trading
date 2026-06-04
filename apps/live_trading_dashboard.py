@@ -371,11 +371,13 @@ def _render_weather(st, px, state: DashboardState, config) -> None:
     _render_weather_metrics(st, obs, forecasts, daily, state, target_date)
 
     obs_target = _weather_for_target_date(obs, target_date)
+    access_cutoff = _weather_access_cutoff(weather, state, config)
+    obs_chart = _filter_weather_by_access_time(obs_target, access_cutoff)
     forecast_target = _weather_for_target_date(forecasts, target_date)
     chart_rows = []
     for frame, label in [
-        (obs_target, "Observed proxy"),
-        (forecast_target, "Forecast proxy"),
+        (obs_chart, "Observed hourly temp"),
+        (forecast_target, "Forecast temp"),
     ]:
         if frame.empty or not {"timestamp", "temperature_2m"}.issubset(frame.columns):
             continue
@@ -396,7 +398,7 @@ def _render_weather(st, px, state: DashboardState, config) -> None:
             labels={"temperature_2m": "Temperature / high (F)", "timestamp": "Local time"},
         )
         high_so_far = _weather_trace_frame(
-            obs_target,
+            obs_chart,
             value_col="observed_high_so_far",
             series_name="Observed high so far",
         )
@@ -410,7 +412,7 @@ def _render_weather(st, px, state: DashboardState, config) -> None:
                 marker=dict(size=7),
             )
         six_hour_max = _weather_trace_frame(
-            obs_target,
+            obs_chart,
             value_col="nws_6h_max_temp",
             series_name="NWS 6h max remark",
         )
@@ -423,7 +425,7 @@ def _render_weather(st, px, state: DashboardState, config) -> None:
                 marker=dict(symbol="diamond", size=11),
             )
         daily_max = _weather_trace_frame(
-            obs_target,
+            obs_chart,
             value_col="nws_24h_max_temp",
             series_name="NWS 24h max remark",
         )
@@ -437,6 +439,8 @@ def _render_weather(st, px, state: DashboardState, config) -> None:
             )
         chart.update_layout(height=430, margin=dict(l=10, r=10, t=55, b=45))
         st.plotly_chart(chart, use_container_width=True)
+        if access_cutoff is not None:
+            st.caption(f"Observation-derived traces include only data available by {access_cutoff.isoformat()} local time.")
     if not daily.empty:
         st.markdown("#### Daily Forecast")
         st.dataframe(
@@ -666,6 +670,40 @@ def _weather_trace_frame(
     trace["value"] = pd.to_numeric(trace[value_col], errors="coerce")
     trace["series"] = series_name
     return trace.dropna(subset=["timestamp", "value"])[["timestamp", "value", "series"]]
+
+
+def _weather_access_cutoff(weather: pd.DataFrame, state: DashboardState, config) -> pd.Timestamp | None:
+    for column in ["snapshot_prediction_time", "snapshot_fetched_at"]:
+        if column not in weather.columns:
+            continue
+        values = weather[column].dropna().astype(str)
+        values = values[values.str.strip() != ""]
+        if not values.empty:
+            return _local_naive_timestamp(values.iloc[0], config)
+    refreshed_at = state.status.get("refreshed_at", "")
+    if refreshed_at:
+        return _local_naive_timestamp(refreshed_at, config)
+    return None
+
+
+def _filter_weather_by_access_time(frame: pd.DataFrame, cutoff: pd.Timestamp | None) -> pd.DataFrame:
+    if frame.empty or cutoff is None or "timestamp" not in frame.columns:
+        return frame.copy()
+    result = frame.copy()
+    timestamps = pd.to_datetime(result["timestamp"], errors="coerce")
+    return result[timestamps.notna() & (timestamps <= cutoff)].copy()
+
+
+def _local_naive_timestamp(value: Any, config) -> pd.Timestamp | None:
+    try:
+        timestamp = pd.Timestamp(value)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(timestamp):
+        return None
+    if timestamp.tzinfo is not None:
+        timestamp = timestamp.tz_convert(config.weather.timezone).tz_localize(None)
+    return timestamp
 
 
 def _render_weather_source_summary(st, config) -> None:
