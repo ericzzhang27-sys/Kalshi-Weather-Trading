@@ -73,12 +73,38 @@ class OutputSettings:
     orderbook_snapshot_path: Path
     orderbook_summary_path: Path
     edge_table_path: Path
+    portfolio_snapshot_path: Path
+    risk_decisions_path: Path
+    order_intents_path: Path
+    paper_orders_path: Path
+    paper_positions_path: Path
+    paper_pnl_path: Path
+    trading_cycle_log_path: Path
     dashboard_status_path: Path
 
 
 @dataclass(frozen=True)
 class RiskSettings:
     kill_switch_path: Path
+    max_contracts_per_order: int = 1
+    max_contracts_per_market: int = 5
+    max_dollars_per_order: float = 5.0
+    max_dollars_per_market: float = 20.0
+    max_dollars_per_event: float = 30.0
+    max_correlated_event_exposure_dollars: float = 30.0
+    max_total_exposure: float = 50.0
+    max_open_orders: int = 10
+    max_daily_loss_dollars: float = 25.0
+    min_cash_reserve_dollars: float = 0.0
+    denylist_tickers: tuple[str, ...] = ()
+    denylist_event_tickers: tuple[str, ...] = ()
+    denylist_target_dates: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PaperSettings:
+    starting_cash_dollars: float = 100.0
+    fill_mode: str = "immediate"
 
 
 @dataclass(frozen=True)
@@ -134,6 +160,7 @@ class TradingConfig:
     markets: MarketSettings
     weather: LiveWeatherSettings
     edge: EdgeSettings
+    paper: PaperSettings
     outputs: OutputSettings
     risk: RiskSettings
 
@@ -158,6 +185,7 @@ def parse_trading_config(raw: dict[str, Any]) -> TradingConfig:
     markets = _parse_market_settings(raw.get("markets", {}))
     weather = _parse_live_weather_settings(raw.get("weather", {}))
     edge = _parse_edge_settings(raw.get("edge", {}))
+    paper = _parse_paper_settings(raw.get("paper", {}))
     outputs = _parse_output_settings(raw.get("outputs", {}))
     risk = _parse_risk_settings(raw.get("risk", {}))
 
@@ -169,6 +197,7 @@ def parse_trading_config(raw: dict[str, Any]) -> TradingConfig:
         markets=markets,
         weather=weather,
         edge=edge,
+        paper=paper,
         outputs=outputs,
         risk=risk,
     )
@@ -217,6 +246,29 @@ def validate_trading_config(config: TradingConfig) -> None:
         raise TradingConfigError(
             "weather.max_unverified_observed_high_minutes must be nonnegative"
         )
+    if config.risk.max_contracts_per_order < 1:
+        raise TradingConfigError("risk.max_contracts_per_order must be positive")
+    if config.risk.max_contracts_per_market < 1:
+        raise TradingConfigError("risk.max_contracts_per_market must be positive")
+    for name, value in {
+        "risk.max_dollars_per_order": config.risk.max_dollars_per_order,
+        "risk.max_dollars_per_market": config.risk.max_dollars_per_market,
+        "risk.max_dollars_per_event": config.risk.max_dollars_per_event,
+        "risk.max_correlated_event_exposure_dollars": (
+            config.risk.max_correlated_event_exposure_dollars
+        ),
+        "risk.max_total_exposure": config.risk.max_total_exposure,
+        "risk.max_daily_loss_dollars": config.risk.max_daily_loss_dollars,
+        "paper.starting_cash_dollars": config.paper.starting_cash_dollars,
+    }.items():
+        if value <= 0.0:
+            raise TradingConfigError(f"{name} must be positive")
+    if config.risk.max_open_orders < 0:
+        raise TradingConfigError("risk.max_open_orders must be nonnegative")
+    if config.risk.min_cash_reserve_dollars < 0.0:
+        raise TradingConfigError("risk.min_cash_reserve_dollars must be nonnegative")
+    if config.paper.fill_mode not in {"immediate", "none"}:
+        raise TradingConfigError("paper.fill_mode must be immediate or none")
 
 
 def _parse_kalshi_settings(raw: Any) -> KalshiSettings:
@@ -329,6 +381,48 @@ def _parse_output_settings(raw: Any) -> OutputSettings:
                 "outputs/live_trading/edge_table.csv",
             )
         ),
+        portfolio_snapshot_path=_repo_path(
+            data.get(
+                "portfolio_snapshot_path",
+                "outputs/live_trading/portfolio_snapshot.csv",
+            )
+        ),
+        risk_decisions_path=_repo_path(
+            data.get(
+                "risk_decisions_path",
+                "outputs/live_trading/risk_decisions.csv",
+            )
+        ),
+        order_intents_path=_repo_path(
+            data.get(
+                "order_intents_path",
+                "outputs/live_trading/order_intents.csv",
+            )
+        ),
+        paper_orders_path=_repo_path(
+            data.get(
+                "paper_orders_path",
+                "outputs/live_trading/paper_orders.csv",
+            )
+        ),
+        paper_positions_path=_repo_path(
+            data.get(
+                "paper_positions_path",
+                "outputs/live_trading/paper_positions.csv",
+            )
+        ),
+        paper_pnl_path=_repo_path(
+            data.get(
+                "paper_pnl_path",
+                "outputs/live_trading/paper_pnl.csv",
+            )
+        ),
+        trading_cycle_log_path=_repo_path(
+            data.get(
+                "trading_cycle_log_path",
+                "outputs/live_trading/trading_cycle_log.csv",
+            )
+        ),
         dashboard_status_path=_repo_path(
             data.get(
                 "dashboard_status_path",
@@ -358,10 +452,33 @@ def _parse_edge_settings(raw: Any) -> EdgeSettings:
     )
 
 
+def _parse_paper_settings(raw: Any) -> PaperSettings:
+    data = _mapping(raw, "paper")
+    return PaperSettings(
+        starting_cash_dollars=float(data.get("starting_cash_dollars", 100.0)),
+        fill_mode=str(data.get("fill_mode", "immediate")).strip(),
+    )
+
+
 def _parse_risk_settings(raw: Any) -> RiskSettings:
     data = _mapping(raw, "risk")
     return RiskSettings(
-        kill_switch_path=_repo_path(data.get("kill_switch_path", "runtime/KILL_SWITCH_TRADING"))
+        kill_switch_path=_repo_path(data.get("kill_switch_path", "runtime/KILL_SWITCH_TRADING")),
+        max_contracts_per_order=int(data.get("max_contracts_per_order", 1)),
+        max_contracts_per_market=int(data.get("max_contracts_per_market", 5)),
+        max_dollars_per_order=float(data.get("max_dollars_per_order", 5.0)),
+        max_dollars_per_market=float(data.get("max_dollars_per_market", 20.0)),
+        max_dollars_per_event=float(data.get("max_dollars_per_event", 30.0)),
+        max_correlated_event_exposure_dollars=float(
+            data.get("max_correlated_event_exposure_dollars", 30.0)
+        ),
+        max_total_exposure=float(data.get("max_total_exposure", 50.0)),
+        max_open_orders=int(data.get("max_open_orders", 10)),
+        max_daily_loss_dollars=float(data.get("max_daily_loss_dollars", 25.0)),
+        min_cash_reserve_dollars=float(data.get("min_cash_reserve_dollars", 0.0)),
+        denylist_tickers=_tuple_of_strings(data.get("denylist_tickers", [])),
+        denylist_event_tickers=_tuple_of_strings(data.get("denylist_event_tickers", [])),
+        denylist_target_dates=_tuple_of_strings(data.get("denylist_target_dates", [])),
     )
 
 

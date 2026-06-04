@@ -1,20 +1,20 @@
 {
   "dashboard_status": "WARN",
   "data_source": "live_refresh",
-  "event_ticker": "KXHIGHNY-26JUN03",
-  "kalshi_env": "demo",
+  "event_ticker": "KXHIGHNY-26JUN04",
+  "kalshi_env": "production",
   "live_auto_enabled": false,
   "mode": "shadow",
   "model_name": "ngboost_laplace_current36_default",
   "model_path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\models\\ngboost_laplace_current36_default.pkl",
   "probability_rows": 6,
   "read_only": true,
-  "refreshed_at": "2026-06-03T22:35:17.200235-04:00",
-  "target_date": "2026-06-03",
+  "refreshed_at": "2026-06-04T19:29:25.041094-04:00",
+  "target_date": "2026-06-04",
   "trading_enabled": false,
   "warning_count": 2,
   "warnings": [
-    "empty_orderbook",
-    "missing_forecast_issue_time"
+    "missing_forecast_issue_time",
+    "unverified_observed_high_window"
   ]
 }

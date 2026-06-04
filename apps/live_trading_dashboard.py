@@ -105,7 +105,7 @@ def main() -> None:
     with tabs[5]:
         _render_weather(st, px, state, config)
     with tabs[6]:
-        _render_artifacts(st, state)
+        _render_artifacts(st, state, config)
 
 
 def _dashboard_dependencies():
@@ -480,7 +480,7 @@ def _render_weather(st, px, state: DashboardState, config) -> None:
         )
 
 
-def _render_artifacts(st, state: DashboardState) -> None:
+def _render_artifacts(st, state: DashboardState, config) -> None:
     st.subheader("Audit Artifacts")
     orderbook_summary = getattr(state, "orderbook_summary", pd.DataFrame())
     edge_table = getattr(state, "edge_table", pd.DataFrame())
@@ -496,6 +496,18 @@ def _render_artifacts(st, state: DashboardState) -> None:
         "orderbook_summary.csv": orderbook_summary.to_csv(index=False),
         "edge_table.csv": edge_table.to_csv(index=False),
     }
+    for name, path in {
+        "portfolio_snapshot.csv": config.outputs.portfolio_snapshot_path,
+        "risk_decisions.csv": config.outputs.risk_decisions_path,
+        "order_intents.csv": config.outputs.order_intents_path,
+        "paper_orders.csv": config.outputs.paper_orders_path,
+        "paper_positions.csv": config.outputs.paper_positions_path,
+        "paper_pnl.csv": config.outputs.paper_pnl_path,
+        "trading_cycle_log.csv": config.outputs.trading_cycle_log_path,
+    }.items():
+        payload = _read_artifact_text(path)
+        if payload is not None:
+            artifacts[name] = payload
     for name, payload in artifacts.items():
         mime = "application/json" if name.endswith(".json") else "text/csv"
         st.download_button(
@@ -504,6 +516,13 @@ def _render_artifacts(st, state: DashboardState) -> None:
             file_name=name,
             mime=mime,
         )
+
+
+def _read_artifact_text(path: str | Path) -> str | None:
+    candidate = Path(path)
+    if not candidate.exists():
+        return None
+    return candidate.read_text(encoding="utf-8")
 
 
 def _format_probability_columns(frame: pd.DataFrame) -> pd.DataFrame:

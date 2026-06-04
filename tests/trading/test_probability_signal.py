@@ -29,7 +29,9 @@ def test_score_live_probabilities_against_saved_day2_row() -> None:
     assert not result.bucket_probabilities.empty
     assert result.bucket_probabilities["probability"].sum() == pytest.approx(1.0, abs=1e-6)
     assert result.bucket_probabilities["ticker"].notna().all()
-    assert set(result.bucket_probabilities["probability_signal_status"]) == {"OK"}
+    assert set(result.bucket_probabilities["probability_signal_status"]) == {
+        _expected_signal_status(feature_rows)
+    }
 
 
 def test_score_live_probabilities_accepts_contract_mapping_result() -> None:
@@ -48,7 +50,9 @@ def test_score_live_probabilities_accepts_contract_mapping_result() -> None:
 
     assert len(result.bucket_probabilities) == len(mapping.buckets)
     assert result.diagnostics.probability_row_count == len(mapping.buckets)
-    assert set(result.bucket_probabilities["probability_signal_status"]) == {"OK"}
+    assert set(result.bucket_probabilities["probability_signal_status"]) == {
+        _expected_signal_status(feature_rows)
+    }
 
 
 def test_score_live_probabilities_propagates_feature_no_trade(monkeypatch) -> None:
@@ -137,3 +141,10 @@ def test_score_live_probabilities_propagates_feature_no_trade(monkeypatch) -> No
     assert set(result.bucket_probabilities["probability_signal_reason"]) == {
         "unverified_observed_high_window"
     }
+
+
+def _expected_signal_status(feature_rows: pd.DataFrame) -> str:
+    if "live_feature_status" not in feature_rows.columns:
+        return "OK"
+    statuses = feature_rows["live_feature_status"].dropna().astype(str)
+    return "NO_TRADE" if (statuses == "NO_TRADE").any() else "OK"

@@ -1,0 +1,1 @@
+submitted_at,paper_order_id,client_order_id,row_id,event_ticker,ticker,outcome_side,action,contracts,limit_price_dollars,fill_price_dollars,fee_dollars,gross_cost_dollars,total_cost_dollars,cash_before_dollars,cash_after_dollars,paper_status,paper_reason
