@@ -658,7 +658,8 @@ def _render_weather_metrics(st, obs: pd.DataFrame, forecasts: pd.DataFrame, dail
     daily_target = _weather_for_target_date(daily, target_date)
 
     current_temp = _latest_numeric(obs_target, "temperature_2m", "timestamp")
-    high_so_far = _max_numeric(obs_target, "temperature_2m")
+    high_so_far = _latest_numeric(obs_target, "observed_high_so_far", "timestamp")
+    high_so_far = _coalesce_float(high_so_far, _max_numeric(obs_target, "temperature_2m"))
     forecast_high = _first_numeric(daily_target, "forecast_high")
     forecast_current = _latest_numeric(forecast_target, "temperature_2m", "timestamp")
 

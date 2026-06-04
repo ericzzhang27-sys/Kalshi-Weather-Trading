@@ -147,7 +147,7 @@ def load_dashboard_state(
         weather = fetch_live_weather(
             location=config.markets.default_location,
             target_date=selected_target_date,
-            prediction_time=prediction_time or datetime.now(),
+            prediction_time=prediction_time or refresh_time,
             config=config,
             client=weather_client,
             fetched_at=refresh_time,
