@@ -210,31 +210,8 @@ def _render_bucket_board(st, state: DashboardState) -> None:
     if board.empty:
         st.info("No bucket board is available yet.")
         return
-    display_cols = [
-        column
-        for column in [
-            "ticker",
-            "bucket_name",
-            "bucket_lower_temp",
-            "bucket_upper_temp",
-            "probability",
-            "best_yes_bid",
-            "best_yes_ask",
-            "yes_spread",
-            "best_no_bid",
-            "best_no_ask",
-            "no_spread",
-            "yes_bid_depth",
-            "yes_ask_depth",
-            "best_edge_action",
-            "best_net_edge",
-            "best_edge_status",
-            "orderbook_status",
-            "mapping_status",
-        ]
-        if column in board.columns
-    ]
-    st.dataframe(_format_probability_columns(board[display_cols]), use_container_width=True, hide_index=True)
+    st.caption("Market prices are read from Kalshi production market data and shown as executable buy buttons when available.")
+    st.dataframe(_kalshi_bucket_board_display(board), use_container_width=True, hide_index=True)
 
 
 def _render_probability(st, px, state: DashboardState) -> None:
@@ -500,6 +477,107 @@ def _format_probability_columns(frame: pd.DataFrame) -> pd.DataFrame:
         if column in result.columns:
             result[column] = pd.to_numeric(result[column], errors="coerce").round(4)
     return result
+
+
+def _kalshi_bucket_board_display(board: pd.DataFrame) -> pd.DataFrame:
+    records: list[dict[str, Any]] = []
+    for _, row in board.iterrows():
+        yes_buy_price = _coalesce_numeric(row.get("yes_ask_dollars"), row.get("best_yes_ask"))
+        no_buy_price = _coalesce_numeric(row.get("no_ask_dollars"), row.get("best_no_ask"))
+        chance_price = _coalesce_numeric(
+            row.get("last_price_dollars"),
+            _market_chance_from_prices(row, yes_buy_price, no_buy_price),
+        )
+        records.append(
+            {
+                "Market": row.get("bucket_name", ""),
+                "Chance": _format_market_chance(chance_price),
+                "Yes": _format_kalshi_button("Yes", yes_buy_price),
+                "No": _format_kalshi_button("No", no_buy_price),
+                "Model": _format_percent(row.get("probability")),
+                "Best Edge": _format_edge(row.get("best_edge_action"), row.get("best_net_edge")),
+                "Status": row.get("orderbook_status", ""),
+                "Ticker": row.get("ticker", ""),
+            }
+        )
+    return pd.DataFrame.from_records(records)
+
+
+def _market_chance_from_prices(
+    row: pd.Series,
+    yes_buy_price: float | None,
+    no_buy_price: float | None,
+) -> float | None:
+    yes_bid = _coalesce_numeric(row.get("yes_bid_dollars"), row.get("best_yes_bid"))
+    no_bid = _coalesce_numeric(row.get("no_bid_dollars"), row.get("best_no_bid"))
+    if yes_bid is not None and yes_buy_price is not None:
+        return (yes_bid + yes_buy_price) / 2.0
+    if no_bid is not None and no_buy_price is not None:
+        no_mid = (no_bid + no_buy_price) / 2.0
+        return 1.0 - no_mid
+    if yes_buy_price is not None:
+        return yes_buy_price
+    if no_buy_price is not None:
+        return 1.0 - no_buy_price
+    if yes_bid is not None:
+        return yes_bid
+    if no_bid is not None:
+        return 1.0 - no_bid
+    return None
+
+
+def _format_market_chance(value: Any) -> str:
+    numeric = _coalesce_numeric(value)
+    if numeric is None:
+        return "--"
+    bounded = min(1.0, max(0.0, numeric))
+    if bounded <= 0.01:
+        return "<1%"
+    if bounded >= 0.995:
+        return ">99%"
+    return f"{bounded * 100:.0f}%"
+
+
+def _format_percent(value: Any) -> str:
+    numeric = _coalesce_numeric(value)
+    if numeric is None:
+        return "--"
+    if numeric <= 0.01:
+        return "<1%"
+    if numeric >= 0.995:
+        return ">99%"
+    return f"{numeric * 100:.0f}%"
+
+
+def _format_kalshi_button(label: str, price: Any) -> str:
+    numeric = _coalesce_numeric(price)
+    if numeric is None:
+        return f"{label} --"
+    if numeric >= 0.995:
+        return label
+    cents = max(0, min(100, int(round(numeric * 100))))
+    if cents <= 0:
+        return f"{label} <1c"
+    return f"{label} {cents}c"
+
+
+def _format_edge(action: Any, net_edge: Any) -> str:
+    action_text = str(action or "").strip()
+    edge = _coalesce_numeric(net_edge)
+    if not action_text or edge is None:
+        return "--"
+    return f"{action_text} ({edge * 100:.1f}c)"
+
+
+def _coalesce_numeric(*values: Any) -> float | None:
+    for value in values:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if pd.notna(numeric):
+            return numeric
+    return None
 
 
 def _filter_source_role(frame: pd.DataFrame, source_role: str) -> pd.DataFrame:

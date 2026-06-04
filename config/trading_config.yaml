@@ -3,7 +3,7 @@ trading_enabled: false
 live_auto_enabled: false
 
 kalshi:
-  env: demo
+  env: production
   demo_base_url: https://external-api.demo.kalshi.co/trade-api/v2
   production_base_url: https://external-api.kalshi.com/trade-api/v2
   request_timeout_seconds: 15

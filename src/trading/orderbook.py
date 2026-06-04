@@ -97,7 +97,14 @@ def fetch_orderbooks(
         )
 
     orderbook = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=ORDERBOOK_COLUMNS)
-    summary = pd.concat(summaries, ignore_index=True) if summaries else pd.DataFrame(columns=ORDERBOOK_SUMMARY_COLUMNS)
+    summary_records: list[dict[str, Any]] = []
+    for summary_frame in summaries:
+        summary_records.extend(summary_frame.to_dict("records"))
+    summary = (
+        pd.DataFrame.from_records(summary_records).reindex(columns=ORDERBOOK_SUMMARY_COLUMNS)
+        if summary_records
+        else pd.DataFrame(columns=ORDERBOOK_SUMMARY_COLUMNS)
+    )
     return OrderbookSnapshot(fetched_at=fetched_at_dt, orderbook=orderbook, summary=summary)
 
 

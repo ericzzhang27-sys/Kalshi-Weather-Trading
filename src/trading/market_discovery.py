@@ -30,6 +30,8 @@ MARKET_DISCOVERY_COLUMNS = [
     "expected_expiration_time",
     "latest_expiration_time",
     "settlement_timer_seconds",
+    "last_price_dollars",
+    "previous_price_dollars",
     "yes_bid_dollars",
     "yes_ask_dollars",
     "no_bid_dollars",
@@ -81,6 +83,8 @@ class DiscoveredMarket:
     expected_expiration_time: str
     latest_expiration_time: str
     settlement_timer_seconds: Any
+    last_price_dollars: Any
+    previous_price_dollars: Any
     yes_bid_dollars: Any
     yes_ask_dollars: Any
     no_bid_dollars: Any
@@ -243,6 +247,8 @@ def _normalize_market(
         expected_expiration_time=_string_field(market, "expected_expiration_time"),
         latest_expiration_time=_string_field(market, "latest_expiration_time"),
         settlement_timer_seconds=market.get("settlement_timer_seconds"),
+        last_price_dollars=market.get("last_price_dollars"),
+        previous_price_dollars=market.get("previous_price_dollars"),
         yes_bid_dollars=market.get("yes_bid_dollars"),
         yes_ask_dollars=market.get("yes_ask_dollars"),
         no_bid_dollars=market.get("no_bid_dollars"),
