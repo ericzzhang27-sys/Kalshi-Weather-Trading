@@ -271,6 +271,67 @@ def test_nws_station_observations_are_converted_to_feature_compatible_units() ->
     assert snapshot.no_trade is False
 
 
+def test_nws_station_observed_high_window_blocks_stale_max_summary() -> None:
+    config = parse_trading_config(
+        {
+            "weather": {
+                "observations_provider": "nws_station",
+                "max_unverified_observed_high_minutes": 20,
+            }
+        }
+    )
+    forecast_client = FakeOpenMeteoClient([_forecast_payload()])
+    payload = {
+        "features": [
+            {
+                "properties": {
+                    "timestamp": "2026-06-02T11:51:00+00:00",
+                    "temperature": {"unitCode": "wmoUnit:degC", "value": 22.0},
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 10.0},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 50.0},
+                    "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 0.0},
+                    "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 101000},
+                    "precipitationLastHour": {"unitCode": "wmoUnit:mm", "value": 0.0},
+                    "cloudLayers": [{"amount": "CLR"}],
+                    "textDescription": "Clear",
+                    "rawMessage": "KNYC 021151Z AUTO RMK AO2 T02200100 10283",
+                }
+            },
+            {
+                "properties": {
+                    "timestamp": "2026-06-02T16:00:00+00:00",
+                    "temperature": {"unitCode": "wmoUnit:degC", "value": 25.0},
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 10.0},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 38.0},
+                    "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 0.0},
+                    "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 101000},
+                    "precipitationLastHour": {"unitCode": "wmoUnit:mm", "value": 0.0},
+                    "cloudLayers": [{"amount": "CLR"}],
+                    "textDescription": "Clear",
+                    "rawMessage": "KNYC 021600Z AUTO RMK AO2 T02500100",
+                }
+            },
+        ]
+    }
+
+    snapshot = fetch_live_weather(
+        location="NYC",
+        target_date=date(2026, 6, 2),
+        prediction_time=datetime(2026, 6, 2, 12, 0),
+        config=config,
+        client=forecast_client,
+        observation_client=FakeNwsObservationClient(payload),
+        fetched_at=datetime(2026, 6, 2, 12, 0),
+    )
+
+    diagnostic = snapshot.diagnostics[
+        snapshot.diagnostics["diagnostic_name"] == "verified_observed_high_window"
+    ].iloc[0]
+    assert diagnostic["status"] == "NO_TRADE"
+    assert diagnostic["no_trade_reason"] == "unverified_observed_high_window"
+    assert snapshot.no_trade is True
+
+
 def test_nws_daily_max_remark_does_not_inflate_intraday_high_so_far() -> None:
     config = parse_trading_config({"weather": {"observations_provider": "nws_station"}})
     forecast_client = FakeOpenMeteoClient([_forecast_payload()])

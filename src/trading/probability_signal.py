@@ -52,8 +52,9 @@ def score_live_probabilities(
     probabilities = prediction.bucket_probabilities.copy()
     probabilities = _attach_tickers(probabilities, mapping_frame)
     probabilities["model_path"] = prediction.diagnostics.model_path
-    probabilities["probability_signal_status"] = "OK"
-    probabilities["probability_signal_reason"] = ""
+    signal_status, signal_reason = _signal_status_from_feature_rows(feature_rows)
+    probabilities["probability_signal_status"] = signal_status
+    probabilities["probability_signal_reason"] = signal_reason
     _validate_probability_signal(probabilities)
 
     return ProbabilitySignalResult(
@@ -162,6 +163,23 @@ def _attach_tickers(probabilities: pd.DataFrame, mapping_frame: pd.DataFrame) ->
     ]
     remaining = [column for column in result.columns if column not in ordered]
     return result[ordered + remaining]
+
+
+def _signal_status_from_feature_rows(feature_rows: pd.DataFrame) -> tuple[str, str]:
+    if "live_feature_status" not in feature_rows.columns:
+        return "OK", ""
+    statuses = feature_rows["live_feature_status"].dropna().astype(str).str.strip()
+    no_trade = statuses[statuses == "NO_TRADE"]
+    if no_trade.empty:
+        return "OK", ""
+    if "no_trade_reason" not in feature_rows.columns:
+        return "NO_TRADE", "live_feature_no_trade"
+    reasons = [
+        str(reason).strip()
+        for reason in feature_rows["no_trade_reason"].dropna().unique()
+        if str(reason).strip()
+    ]
+    return "NO_TRADE", ";".join(reasons) or "live_feature_no_trade"
 
 
 def _sort_mapping_for_buckets(frame: pd.DataFrame) -> pd.DataFrame:

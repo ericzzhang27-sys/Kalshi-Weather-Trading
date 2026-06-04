@@ -121,6 +121,7 @@ class LiveWeatherSettings:
     forecast_days: int = 2
     max_observation_age_minutes: int = 90
     max_forecast_age_minutes: int = 180
+    max_unverified_observed_high_minutes: int = 20
     require_forecast_issue_time: bool = False
 
 
@@ -212,6 +213,10 @@ def validate_trading_config(config: TradingConfig) -> None:
         raise TradingConfigError("weather.forecast_past_hours must be positive")
     if config.weather.forecast_days < 1:
         raise TradingConfigError("weather.forecast_days must be positive")
+    if config.weather.max_unverified_observed_high_minutes < 0:
+        raise TradingConfigError(
+            "weather.max_unverified_observed_high_minutes must be nonnegative"
+        )
 
 
 def _parse_kalshi_settings(raw: Any) -> KalshiSettings:
@@ -401,6 +406,9 @@ def _parse_live_weather_settings(raw: Any) -> LiveWeatherSettings:
         forecast_days=int(data.get("forecast_days", 2)),
         max_observation_age_minutes=int(data.get("max_observation_age_minutes", 90)),
         max_forecast_age_minutes=int(data.get("max_forecast_age_minutes", 180)),
+        max_unverified_observed_high_minutes=int(
+            data.get("max_unverified_observed_high_minutes", 20)
+        ),
         require_forecast_issue_time=bool(data.get("require_forecast_issue_time", False)),
     )
 

@@ -72,6 +72,10 @@ weather:
   forecast_days: 2
   max_observation_age_minutes: 90
   max_forecast_age_minutes: 180
+  # NWS station observations expose the true intra-hour high via periodic max-temp
+  # remarks. After this window, observed_high_so_far is treated as a lower bound
+  # and the dashboard marks weather NO_TRADE.
+  max_unverified_observed_high_minutes: 20
   require_forecast_issue_time: false
 
 risk:

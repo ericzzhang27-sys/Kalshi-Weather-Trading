@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from src.predict_distribution import EngineDiagnostics, PredictionResult
 from src.trading.contract_mapping import map_event_contracts
 from src.trading.probability_signal import score_live_probabilities
 
@@ -48,3 +49,91 @@ def test_score_live_probabilities_accepts_contract_mapping_result() -> None:
     assert len(result.bucket_probabilities) == len(mapping.buckets)
     assert result.diagnostics.probability_row_count == len(mapping.buckets)
     assert set(result.bucket_probabilities["probability_signal_status"]) == {"OK"}
+
+
+def test_score_live_probabilities_propagates_feature_no_trade(monkeypatch) -> None:
+    feature_rows = pd.DataFrame(
+        [
+            {
+                "row_id": "live:test",
+                "live_feature_status": "NO_TRADE",
+                "no_trade_reason": "unverified_observed_high_window",
+            }
+        ]
+    )
+    mapping = pd.DataFrame(
+        [
+            {
+                "mapping_status": "MAPPED",
+                "ticker": "YESLOW",
+                "event_ticker": "EVENT",
+                "bucket_name": "80 or below",
+                "bucket_lower_temp": None,
+                "bucket_upper_temp": 80.5,
+            },
+            {
+                "mapping_status": "MAPPED",
+                "ticker": "YESHIGH",
+                "event_ticker": "EVENT",
+                "bucket_name": "81 or above",
+                "bucket_lower_temp": 80.5,
+                "bucket_upper_temp": None,
+            },
+        ]
+    )
+
+    class FakeEngine:
+        def predict(self, rows, buckets):
+            return PredictionResult(
+                distribution_params=pd.DataFrame([{"row_id": "live:test"}]),
+                bucket_probabilities=pd.DataFrame(
+                    [
+                        {
+                            "row_id": "live:test",
+                            "bucket_index": 0,
+                            "bucket_name": "80 or below",
+                            "bucket_lower_temp": None,
+                            "bucket_upper_temp": 80.5,
+                            "probability": 0.25,
+                            "mu": 0.0,
+                            "sigma": 1.0,
+                        },
+                        {
+                            "row_id": "live:test",
+                            "bucket_index": 1,
+                            "bucket_name": "81 or above",
+                            "bucket_lower_temp": 80.5,
+                            "bucket_upper_temp": None,
+                            "probability": 0.75,
+                            "mu": 0.0,
+                            "sigma": 1.0,
+                        },
+                    ]
+                ),
+                diagnostics=EngineDiagnostics(
+                    model_path="fake.pkl",
+                    model_name="fake",
+                    distribution_type="normal",
+                    feature_count=0,
+                    model_sigma_scale=1.0,
+                    calibration_alpha=1.0,
+                    calibration_method="none",
+                    prediction_row_count=1,
+                    probability_row_count=2,
+                    bucket_count_per_prediction=2,
+                    max_abs_row_probability_sum_deviation=0.0,
+                    total_feature_values_imputed_or_replaced=0,
+                ),
+            )
+
+    monkeypatch.setattr(
+        "src.trading.probability_signal.load_probability_engine",
+        lambda **kwargs: FakeEngine(),
+    )
+
+    result = score_live_probabilities(feature_rows, mapping)
+
+    assert set(result.bucket_probabilities["probability_signal_status"]) == {"NO_TRADE"}
+    assert set(result.bucket_probabilities["probability_signal_reason"]) == {
+        "unverified_observed_high_window"
+    }

@@ -740,6 +740,14 @@ def _build_weather_diagnostics(
             max_age_minutes=config.weather.max_forecast_age_minutes,
         )
     )
+    verified_high_record = _verified_observed_high_record(
+        hourly_observations=hourly_observations,
+        target_date=target_date,
+        prediction_time=prediction_time,
+        config=config,
+    )
+    if verified_high_record is not None:
+        records.append(verified_high_record)
 
     target_ts = pd.Timestamp(target_date)
     if daily_forecast.empty or "forecast_high" not in daily_forecast.columns:
@@ -801,6 +809,70 @@ def _build_weather_diagnostics(
         )
     )
     return pd.DataFrame.from_records(records)
+
+
+def _verified_observed_high_record(
+    *,
+    hourly_observations: pd.DataFrame,
+    target_date: date,
+    prediction_time: datetime,
+    config: TradingConfig,
+) -> dict[str, Any] | None:
+    if config.weather.observations_provider != "nws_station":
+        return None
+    name = "verified_observed_high_window"
+    if hourly_observations.empty or "timestamp" not in hourly_observations.columns:
+        return _diagnostic_record(
+            name,
+            "hourly_observations",
+            "NO_TRADE",
+            "missing_observed_high_times",
+        )
+    if "nws_6h_max_temp" not in hourly_observations.columns:
+        return _diagnostic_record(
+            name,
+            "hourly_observations",
+            "NO_TRADE",
+            "missing_nws_max_temperature_report",
+        )
+
+    frame = hourly_observations.copy()
+    frame["timestamp"] = pd.to_datetime(frame["timestamp"], errors="coerce")
+    frame["nws_6h_max_temp"] = pd.to_numeric(frame["nws_6h_max_temp"], errors="coerce")
+    target_ts = pd.Timestamp(target_date).normalize()
+    usable = frame[
+        (frame["timestamp"].notna())
+        & (frame["timestamp"] <= pd.Timestamp(prediction_time))
+        & (frame["timestamp"].dt.normalize() == target_ts)
+        & (frame["nws_6h_max_temp"].notna())
+    ]
+    if usable.empty:
+        return _diagnostic_record(
+            name,
+            "hourly_observations",
+            "NO_TRADE",
+            "missing_nws_max_temperature_report",
+            detail="No target-date NWS 6-hour max-temperature remark is available yet.",
+        )
+
+    latest_summary = usable["timestamp"].max().to_pydatetime()
+    age_minutes = (prediction_time - latest_summary).total_seconds() / 60.0
+    max_age = config.weather.max_unverified_observed_high_minutes
+    status = "OK" if age_minutes <= max_age else "NO_TRADE"
+    reason = "" if status == "OK" else "unverified_observed_high_window"
+    detail = (
+        "NWS max-temperature remarks verify the station high only through the "
+        f"latest summary report; max_unverified_minutes={max_age}."
+    )
+    return _diagnostic_record(
+        name,
+        "hourly_observations",
+        status,
+        reason,
+        source_time=latest_summary,
+        age_minutes=age_minutes,
+        detail=detail,
+    )
 
 
 def _freshness_record(
