@@ -7,3 +7,6 @@ requests
 scikit-learn
 scipy
 PyYAML
+plotly
+streamlit
+streamlit-autorefresh

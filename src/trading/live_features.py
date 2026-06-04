@@ -55,6 +55,7 @@ def build_live_feature_rows(
     engineered = build_feature_matrix(inputs)
     if engineered.empty:
         raise ValueError("Live feature builder produced no rows; critical weather fields are missing")
+    engineered = _apply_observed_high_so_far_override(engineered, weather)
 
     missing_features = [column for column in feature_columns if column not in engineered.columns]
     if missing_features:
@@ -179,6 +180,59 @@ def _weather_status(weather: LiveWeatherSnapshot) -> tuple[str, str]:
         if str(reason)
     ]
     return "NO_TRADE", ";".join(reasons)
+
+
+def _apply_observed_high_so_far_override(
+    engineered: pd.DataFrame,
+    weather: LiveWeatherSnapshot,
+) -> pd.DataFrame:
+    observations = weather.hourly_observations
+    if (
+        engineered.empty
+        or observations.empty
+        or "observed_high_so_far" not in observations.columns
+        or "prediction_time" not in engineered.columns
+    ):
+        return engineered
+
+    result = engineered.copy()
+    obs = observations.copy()
+    obs["timestamp"] = pd.to_datetime(obs["timestamp"], errors="coerce")
+    obs["observed_high_so_far"] = pd.to_numeric(obs["observed_high_so_far"], errors="coerce")
+    if "observed_high_so_far_source_time" in obs.columns:
+        obs["observed_high_so_far_source_time"] = pd.to_datetime(
+            obs["observed_high_so_far_source_time"],
+            errors="coerce",
+        )
+    else:
+        obs["observed_high_so_far_source_time"] = obs["timestamp"]
+    obs = obs.dropna(subset=["timestamp", "observed_high_so_far"]).sort_values("timestamp")
+    if obs.empty:
+        return result
+
+    for row_index, row in result.iterrows():
+        prediction_time = pd.Timestamp(row["prediction_time"])
+        usable = obs[obs["timestamp"] <= prediction_time]
+        if usable.empty:
+            continue
+        latest = usable.iloc[-1]
+        high = float(latest["observed_high_so_far"])
+        source_time = latest["observed_high_so_far_source_time"]
+        result.at[row_index, "max_temp_so_far"] = high
+        result.at[row_index, "max_temp_so_far_source_time"] = source_time
+        if "current_temp" in result.columns:
+            result.at[row_index, "current_temp_minus_max_so_far"] = result.at[row_index, "current_temp"] - high
+        if "forecast_high" in result.columns:
+            result.at[row_index, "max_so_far_minus_forecast_high"] = high - result.at[row_index, "forecast_high"]
+        if "forecast_max_so_far" in result.columns:
+            result.at[row_index, "max_temp_error_so_far"] = high - result.at[row_index, "forecast_max_so_far"]
+        if pd.notna(source_time):
+            source_ts = pd.Timestamp(source_time)
+            result.at[row_index, "minutes_since_max_temp_so_far"] = (
+                prediction_time - source_ts
+            ).total_seconds() / 60.0
+            result.at[row_index, "hour_of_max_temp_so_far"] = float(source_ts.hour)
+    return result
 
 
 def _feature_source(

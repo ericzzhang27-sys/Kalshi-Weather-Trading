@@ -67,6 +67,9 @@ class OutputSettings:
     live_weather_snapshot_path: Path
     live_feature_rows_path: Path
     live_feature_freshness_path: Path
+    live_bucket_probabilities_path: Path
+    orderbook_snapshot_path: Path
+    dashboard_status_path: Path
 
 
 @dataclass(frozen=True)
@@ -81,8 +84,20 @@ class WeatherGridSettings:
 
 
 @dataclass(frozen=True)
+class NwsStationSettings:
+    station_id: str = "KNYC"
+    station_name: str = "NY City Central Park"
+    ghcn_station_id: str = "GHCND:USW00094728"
+    latitude: float = 40.77898
+    longitude: float = -73.96925
+    base_url: str = "https://api.weather.gov"
+    user_agent: str = "KalshiWeatherTrading/0.1 (local research; contact user)"
+
+
+@dataclass(frozen=True)
 class LiveWeatherSettings:
     provider: str = "open_meteo"
+    observations_provider: str = "nws_station"
     forecast_base_url: str = "https://api.open-meteo.com/v1/forecast"
     timezone: str = "America/New_York"
     temperature_unit: str = "fahrenheit"
@@ -96,6 +111,7 @@ class LiveWeatherSettings:
         latitude=40.78858,
         longitude=-73.9661,
     )
+    nws_station: NwsStationSettings = NwsStationSettings()
     observed_past_hours: int = 12
     forecast_past_hours: int = 12
     forecast_days: int = 2
@@ -179,6 +195,10 @@ def validate_trading_config(config: TradingConfig) -> None:
         raise TradingConfigError("markets.max_pages must be positive")
     if config.weather.provider != "open_meteo":
         raise TradingConfigError("weather.provider must be open_meteo")
+    if config.weather.observations_provider not in {"open_meteo", "nws_station"}:
+        raise TradingConfigError(
+            "weather.observations_provider must be open_meteo or nws_station"
+        )
     if config.weather.observed_past_hours < 1:
         raise TradingConfigError("weather.observed_past_hours must be positive")
     if config.weather.forecast_past_hours < 1:
@@ -273,6 +293,24 @@ def _parse_output_settings(raw: Any) -> OutputSettings:
                 "outputs/live_trading/live_feature_freshness.csv",
             )
         ),
+        live_bucket_probabilities_path=_repo_path(
+            data.get(
+                "live_bucket_probabilities_path",
+                "outputs/live_trading/live_bucket_probabilities.csv",
+            )
+        ),
+        orderbook_snapshot_path=_repo_path(
+            data.get(
+                "orderbook_snapshot_path",
+                "outputs/live_trading/orderbook_snapshot.csv",
+            )
+        ),
+        dashboard_status_path=_repo_path(
+            data.get(
+                "dashboard_status_path",
+                "outputs/live_trading/dashboard_status.json",
+            )
+        ),
     )
 
 
@@ -305,8 +343,10 @@ def _parse_live_weather_settings(raw: Any) -> LiveWeatherSettings:
         ),
         "weather.forecast_grid",
     )
+    nws_station = _parse_nws_station_settings(data.get("nws_station", {}))
     return LiveWeatherSettings(
         provider=str(data.get("provider", "open_meteo")).strip(),
+        observations_provider=str(data.get("observations_provider", "nws_station")).strip(),
         forecast_base_url=str(
             data.get("forecast_base_url", "https://api.open-meteo.com/v1/forecast")
         ).rstrip("/"),
@@ -316,12 +356,28 @@ def _parse_live_weather_settings(raw: Any) -> LiveWeatherSettings:
         precipitation_unit=str(data.get("precipitation_unit", "inch")).strip(),
         observation_grid=observation_grid,
         forecast_grid=forecast_grid,
+        nws_station=nws_station,
         observed_past_hours=int(data.get("observed_past_hours", 12)),
         forecast_past_hours=int(data.get("forecast_past_hours", 12)),
         forecast_days=int(data.get("forecast_days", 2)),
         max_observation_age_minutes=int(data.get("max_observation_age_minutes", 90)),
         max_forecast_age_minutes=int(data.get("max_forecast_age_minutes", 180)),
         require_forecast_issue_time=bool(data.get("require_forecast_issue_time", False)),
+    )
+
+
+def _parse_nws_station_settings(raw: Any) -> NwsStationSettings:
+    data = _mapping(raw, "weather.nws_station")
+    return NwsStationSettings(
+        station_id=str(data.get("station_id", "KNYC")).strip(),
+        station_name=str(data.get("station_name", "NY City Central Park")).strip(),
+        ghcn_station_id=str(data.get("ghcn_station_id", "GHCND:USW00094728")).strip(),
+        latitude=float(data.get("latitude", 40.77898)),
+        longitude=float(data.get("longitude", -73.96925)),
+        base_url=str(data.get("base_url", "https://api.weather.gov")).rstrip("/"),
+        user_agent=str(
+            data.get("user_agent", "KalshiWeatherTrading/0.1 (local research; contact user)")
+        ).strip(),
     )
 
 

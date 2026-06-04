@@ -8,7 +8,7 @@ import sys
 import pandas as pd
 
 from src.predict_distribution import DEFAULT_FEATURE_LIST_PATH, load_probability_engine
-from src.trading.config import load_trading_config
+from src.trading.config import parse_trading_config
 from src.trading.contract_mapping import map_event_contracts
 from src.trading.live_features import build_live_feature_rows
 from src.trading.live_weather import fetch_live_weather
@@ -205,7 +205,7 @@ def _mapping():
 
 
 def _feature_rows():
-    config = load_trading_config()
+    config = parse_trading_config({"weather": {"observations_provider": "open_meteo"}})
     client = FakeOpenMeteoClient([_observation_payload(), _forecast_payload()])
     weather = fetch_live_weather(
         location="NYC",

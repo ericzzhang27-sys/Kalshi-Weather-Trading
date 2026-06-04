@@ -18,6 +18,29 @@ class FakeOpenMeteoClient:
         return self.payloads.pop(0)
 
 
+class FakeNwsObservationClient:
+    def __init__(self, payload):
+        self.payload = payload
+        self.calls = []
+
+    def fetch_observations(self, station_id, *, start, end, limit=500):
+        self.calls.append(
+            {
+                "station_id": station_id,
+                "start": start,
+                "end": end,
+                "limit": limit,
+            }
+        )
+        return self.payload
+
+
+def _open_meteo_observation_config(**weather_overrides):
+    weather = {"observations_provider": "open_meteo"}
+    weather.update(weather_overrides)
+    return parse_trading_config({"weather": weather})
+
+
 def _hourly_payload(times=None, unit="°F"):
     times = times or [
         "2026-06-02T09:00",
@@ -125,7 +148,7 @@ def _forecast_payload(include_high=True, unit="°F", issue_time=None):
 
 
 def test_fetch_live_weather_builds_frames_and_warns_on_missing_issue_time() -> None:
-    config = load_trading_config()
+    config = _open_meteo_observation_config()
     client = FakeOpenMeteoClient([_hourly_payload(), _forecast_payload()])
 
     snapshot = fetch_live_weather(
@@ -147,7 +170,7 @@ def test_fetch_live_weather_builds_frames_and_warns_on_missing_issue_time() -> N
 
 
 def test_stale_observation_produces_no_trade_diagnostic() -> None:
-    config = load_trading_config()
+    config = _open_meteo_observation_config()
     client = FakeOpenMeteoClient(
         [
             _hourly_payload(times=["2026-06-02T06:00", "2026-06-02T07:00"]),
@@ -168,7 +191,7 @@ def test_stale_observation_produces_no_trade_diagnostic() -> None:
 
 
 def test_missing_daily_forecast_high_produces_no_trade_diagnostic() -> None:
-    config = load_trading_config()
+    config = _open_meteo_observation_config()
     client = FakeOpenMeteoClient([_hourly_payload(), _forecast_payload(include_high=False)])
 
     snapshot = fetch_live_weather(
@@ -184,7 +207,7 @@ def test_missing_daily_forecast_high_produces_no_trade_diagnostic() -> None:
 
 
 def test_unit_mismatch_produces_no_trade_diagnostic() -> None:
-    config = load_trading_config()
+    config = _open_meteo_observation_config()
     client = FakeOpenMeteoClient([_hourly_payload(unit="°C"), _forecast_payload()])
 
     snapshot = fetch_live_weather(
@@ -200,7 +223,7 @@ def test_unit_mismatch_produces_no_trade_diagnostic() -> None:
 
 
 def test_required_issue_time_turns_missing_issue_warning_into_no_trade() -> None:
-    config = parse_trading_config({"weather": {"require_forecast_issue_time": True}})
+    config = _open_meteo_observation_config(require_forecast_issue_time=True)
     client = FakeOpenMeteoClient([_hourly_payload(), _forecast_payload()])
 
     snapshot = fetch_live_weather(
@@ -216,3 +239,72 @@ def test_required_issue_time_turns_missing_issue_warning_into_no_trade() -> None
         snapshot.diagnostics["diagnostic_name"] == "forecast_issue_time_present"
     ].iloc[0]
     assert issue_diag["status"] == "NO_TRADE"
+
+
+def test_nws_station_observations_are_converted_to_feature_compatible_units() -> None:
+    config = parse_trading_config({"weather": {"observations_provider": "nws_station"}})
+    forecast_client = FakeOpenMeteoClient([_forecast_payload()])
+    observation_client = FakeNwsObservationClient(_nws_observation_payload())
+
+    snapshot = fetch_live_weather(
+        location="NYC",
+        target_date=date(2026, 6, 2),
+        prediction_time=datetime(2026, 6, 2, 12, 0),
+        config=config,
+        client=forecast_client,
+        observation_client=observation_client,
+        fetched_at=datetime(2026, 6, 2, 12, 5),
+    )
+
+    assert len(forecast_client.calls) == 1
+    assert observation_client.calls[0]["station_id"] == "KNYC"
+    assert snapshot.hourly_observations["forecast_source"].iloc[0] == "nws_station_observations"
+    assert snapshot.hourly_observations["provider_station_id"].iloc[0] == "KNYC"
+    latest = snapshot.hourly_observations.sort_values("timestamp").iloc[-1]
+    assert latest["temperature_2m"] == 77.0
+    assert latest["dew_point_2m"] == 50.0
+    assert round(float(latest["wind_speed_10m"]), 4) == 6.2137
+    assert latest["surface_pressure"] == 1012.0
+    assert latest["precipitation"] == 0.1
+    assert latest["nws_6h_max_temp"] == 82.94
+    assert latest["observed_high_so_far"] == 82.94
+    assert snapshot.no_trade is False
+
+
+def _nws_observation_payload():
+    return {
+        "features": [
+            {
+                "properties": {
+                    "timestamp": "2026-06-02T15:00:00+00:00",
+                    "temperature": {"unitCode": "wmoUnit:degC", "value": 23.0},
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 10.0},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 43.0},
+                    "windDirection": {"unitCode": "wmoUnit:degree_(angle)", "value": 180},
+                    "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 8.0},
+                    "windGust": {"unitCode": "wmoUnit:km_h-1", "value": 16.0},
+                    "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 101000},
+                    "precipitationLastHour": {"unitCode": "wmoUnit:mm", "value": 0.0},
+                    "cloudLayers": [{"amount": "CLR", "base": {"value": None}}],
+                    "textDescription": "Clear",
+                    "rawMessage": "KNYC 021500Z AUTO",
+                }
+            },
+            {
+                "properties": {
+                    "timestamp": "2026-06-02T16:00:00+00:00",
+                    "temperature": {"unitCode": "wmoUnit:degC", "value": 25.0},
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 10.0},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 38.0},
+                    "windDirection": {"unitCode": "wmoUnit:degree_(angle)", "value": 200},
+                    "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 10.0},
+                    "windGust": {"unitCode": "wmoUnit:km_h-1", "value": None},
+                    "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 101200},
+                    "precipitationLastHour": {"unitCode": "wmoUnit:mm", "value": 2.54},
+                    "cloudLayers": [{"amount": "SCT", "base": {"value": 1200}}],
+                    "textDescription": "Partly Cloudy",
+                    "rawMessage": "KNYC 021600Z AUTO 20006KT 10SM SCT040 25/10 A2988 RMK AO2 T02500100 10283",
+                }
+            },
+        ]
+    }

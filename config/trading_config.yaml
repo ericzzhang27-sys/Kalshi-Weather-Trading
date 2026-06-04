@@ -45,12 +45,22 @@ markets:
 
 weather:
   provider: open_meteo
+  observations_provider: nws_station
   forecast_base_url: https://api.open-meteo.com/v1/forecast
   timezone: America/New_York
   temperature_unit: fahrenheit
   wind_speed_unit: mph
   precipitation_unit: inch
-  # Existing source grids from the Open-Meteo raw/forecast exports.
+  # NWS Central Park observations align with Kalshi's settlement station.
+  nws_station:
+    station_id: KNYC
+    station_name: NY City Central Park
+    ghcn_station_id: GHCND:USW00094728
+    latitude: 40.77898
+    longitude: -73.96925
+    base_url: https://api.weather.gov
+    user_agent: KalshiWeatherTrading/0.1 (local research; contact user)
+  # Open-Meteo fallback/raw-data grid and forecast grid.
   observation_grid:
     latitude: 40.808434
     longitude: -74.0199
@@ -75,3 +85,6 @@ outputs:
   live_weather_snapshot_path: outputs/live_trading/live_weather_snapshot.csv
   live_feature_rows_path: outputs/live_trading/live_feature_rows.csv
   live_feature_freshness_path: outputs/live_trading/live_feature_freshness.csv
+  live_bucket_probabilities_path: outputs/live_trading/live_bucket_probabilities.csv
+  orderbook_snapshot_path: outputs/live_trading/orderbook_snapshot.csv
+  dashboard_status_path: outputs/live_trading/dashboard_status.json
