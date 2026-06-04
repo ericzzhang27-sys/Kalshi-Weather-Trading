@@ -670,11 +670,11 @@ def _attach_observed_high_so_far(frame: pd.DataFrame) -> pd.DataFrame:
     if frame.empty or "temperature_2m" not in frame.columns:
         return frame
     result = frame.copy()
-    high_columns = [
-        column
-        for column in ["temperature_2m", "nws_6h_max_temp", "nws_24h_max_temp"]
-        if column in result.columns
-    ]
+    high_columns = ["temperature_2m"]
+    if "nws_6h_max_temp" in result.columns:
+        timestamps = pd.to_datetime(result["timestamp"], errors="coerce")
+        result["_safe_nws_6h_max_temp"] = result["nws_6h_max_temp"].where(timestamps.dt.hour >= 6)
+        high_columns.append("_safe_nws_6h_max_temp")
     result["_candidate_high"] = result[high_columns].max(axis=1, skipna=True)
     result["observed_high_so_far"] = result["_candidate_high"].cummax()
 
@@ -688,7 +688,10 @@ def _attach_observed_high_so_far(frame: pd.DataFrame) -> pd.DataFrame:
             best_time = row.get("timestamp", pd.NaT)
         source_times.append(best_time)
     result["observed_high_so_far_source_time"] = source_times
-    return result.drop(columns=["_candidate_high"])
+    drop_columns = ["_candidate_high"]
+    if "_safe_nws_6h_max_temp" in result.columns:
+        drop_columns.append("_safe_nws_6h_max_temp")
+    return result.drop(columns=drop_columns)
 
 
 def _diagnostics_for_combined_frame(diagnostics: pd.DataFrame) -> pd.DataFrame:

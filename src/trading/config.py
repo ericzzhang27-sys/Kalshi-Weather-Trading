@@ -6,6 +6,8 @@ from typing import Any
 
 import yaml
 
+from src.trading.edge import EdgeSettings
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TRADING_CONFIG_PATH = REPO_ROOT / "config" / "trading_config.yaml"
@@ -69,6 +71,8 @@ class OutputSettings:
     live_feature_freshness_path: Path
     live_bucket_probabilities_path: Path
     orderbook_snapshot_path: Path
+    orderbook_summary_path: Path
+    edge_table_path: Path
     dashboard_status_path: Path
 
 
@@ -128,6 +132,7 @@ class TradingConfig:
     kalshi: KalshiSettings
     markets: MarketSettings
     weather: LiveWeatherSettings
+    edge: EdgeSettings
     outputs: OutputSettings
     risk: RiskSettings
 
@@ -151,6 +156,7 @@ def parse_trading_config(raw: dict[str, Any]) -> TradingConfig:
     kalshi = _parse_kalshi_settings(raw.get("kalshi", {}))
     markets = _parse_market_settings(raw.get("markets", {}))
     weather = _parse_live_weather_settings(raw.get("weather", {}))
+    edge = _parse_edge_settings(raw.get("edge", {}))
     outputs = _parse_output_settings(raw.get("outputs", {}))
     risk = _parse_risk_settings(raw.get("risk", {}))
 
@@ -161,6 +167,7 @@ def parse_trading_config(raw: dict[str, Any]) -> TradingConfig:
         kalshi=kalshi,
         markets=markets,
         weather=weather,
+        edge=edge,
         outputs=outputs,
         risk=risk,
     )
@@ -305,11 +312,43 @@ def _parse_output_settings(raw: Any) -> OutputSettings:
                 "outputs/live_trading/orderbook_snapshot.csv",
             )
         ),
+        orderbook_summary_path=_repo_path(
+            data.get(
+                "orderbook_summary_path",
+                "outputs/live_trading/orderbook_summary.csv",
+            )
+        ),
+        edge_table_path=_repo_path(
+            data.get(
+                "edge_table_path",
+                "outputs/live_trading/edge_table.csv",
+            )
+        ),
         dashboard_status_path=_repo_path(
             data.get(
                 "dashboard_status_path",
                 "outputs/live_trading/dashboard_status.json",
             )
+        ),
+    )
+
+
+def _parse_edge_settings(raw: Any) -> EdgeSettings:
+    data = _mapping(raw, "edge")
+    return EdgeSettings(
+        min_edge_dollars=float(data.get("min_edge_dollars", 0.02)),
+        min_edge_percent=float(data.get("min_edge_percent", 0.0)),
+        slippage_buffer_dollars=float(data.get("slippage_buffer_dollars", 0.005)),
+        min_liquidity_contracts=float(data.get("min_liquidity_contracts", 1.0)),
+        max_spread_dollars=float(data.get("max_spread_dollars", 0.25)),
+        max_staleness_seconds=float(data.get("max_staleness_seconds", 300.0)),
+        fee_rate=float(data.get("fee_rate", 0.07)),
+        evaluation_contracts=float(data.get("evaluation_contracts", 1.0)),
+        trade_fee_rounding_increment=float(
+            data.get("trade_fee_rounding_increment", 0.0001)
+        ),
+        balance_rounding_increment=float(
+            data.get("balance_rounding_increment", 0.01)
         ),
     )
 

@@ -16,6 +16,7 @@ from src.trading.contract_mapping import (
     map_event_contracts,
     save_contract_mapping_result,
 )
+from src.trading.edge import compute_edge_table, save_edge_table
 from src.trading.kalshi_client import KalshiClient
 from src.trading.live_features import build_live_feature_rows, save_live_feature_outputs
 from src.trading.live_weather import (
@@ -32,6 +33,7 @@ from src.trading.orderbook import (
     OrderbookSnapshot,
     fetch_orderbooks,
     save_orderbook_snapshot,
+    save_orderbook_summary,
     summarize_orderbook,
 )
 from src.trading.probability_signal import (
@@ -53,6 +55,7 @@ class DashboardState:
     distribution_params: pd.DataFrame
     orderbook: pd.DataFrame
     orderbook_summary: pd.DataFrame
+    edge_table: pd.DataFrame
     bucket_board: pd.DataFrame
 
 
@@ -113,6 +116,7 @@ def load_dashboard_state(
             distribution_params=pd.DataFrame(),
             orderbook=pd.DataFrame(),
             orderbook_summary=pd.DataFrame(),
+            edge_table=pd.DataFrame(),
             bucket_board=build_bucket_board(mapping_result.mapping, pd.DataFrame(), pd.DataFrame()),
         )
         if write_outputs:
@@ -129,6 +133,9 @@ def load_dashboard_state(
         depth=depth,
         auth=auth_orderbooks,
         fetched_at=refresh_time,
+        evaluated_at=refresh_time,
+        max_staleness_seconds=config.edge.max_staleness_seconds,
+        max_spread_dollars=config.edge.max_spread_dollars,
     )
 
     weather: LiveWeatherSnapshot | None = None
@@ -166,6 +173,16 @@ def load_dashboard_state(
         if probability_result is not None
         else pd.DataFrame()
     )
+    edge_table = (
+        compute_edge_table(
+            bucket_probabilities,
+            orderbook_snapshot.summary,
+            settings=config.edge,
+            evaluated_at=refresh_time,
+        )
+        if not bucket_probabilities.empty
+        else pd.DataFrame()
+    )
     warnings = _state_warnings(
         mapping_result,
         weather,
@@ -188,6 +205,7 @@ def load_dashboard_state(
         mapping_result.mapping,
         bucket_probabilities,
         orderbook_snapshot.summary,
+        edge_table,
     )
     state = DashboardState(
         status=status,
@@ -200,6 +218,7 @@ def load_dashboard_state(
         distribution_params=distribution_params,
         orderbook=orderbook_snapshot.orderbook,
         orderbook_summary=orderbook_snapshot.summary,
+        edge_table=edge_table,
         bucket_board=bucket_board,
     )
     if write_outputs:
@@ -237,8 +256,18 @@ def load_dashboard_state_from_artifacts(config: TradingConfig) -> DashboardState
     market_discovery = _read_csv(config.outputs.market_discovery_snapshot_path)
     weather = _read_csv(config.outputs.live_weather_snapshot_path)
     orderbook = _read_csv(config.outputs.orderbook_snapshot_path)
-    orderbook_summary = _summaries_from_orderbook(orderbook)
-    bucket_board = build_bucket_board(mapping, probabilities, orderbook_summary)
+    orderbook_summary = _summaries_from_orderbook(orderbook, config)
+    if orderbook_summary.empty:
+        orderbook_summary = _read_csv(config.outputs.orderbook_summary_path)
+    if not probabilities.empty:
+        edge_table = compute_edge_table(
+            probabilities,
+            orderbook_summary,
+            settings=config.edge,
+        )
+    else:
+        edge_table = _read_csv(config.outputs.edge_table_path)
+    bucket_board = build_bucket_board(mapping, probabilities, orderbook_summary, edge_table)
     event = _first_nonempty(mapping, "event_ticker") or _first_nonempty(features, "event_ticker")
     status = _status_dict(
         config=config,
@@ -262,6 +291,7 @@ def load_dashboard_state_from_artifacts(config: TradingConfig) -> DashboardState
         distribution_params=distribution_params,
         orderbook=orderbook,
         orderbook_summary=orderbook_summary,
+        edge_table=edge_table,
         bucket_board=bucket_board,
     )
 
@@ -270,6 +300,7 @@ def build_bucket_board(
     mapping: pd.DataFrame,
     probabilities: pd.DataFrame,
     orderbook_summary: pd.DataFrame,
+    edge_table: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     if mapping.empty:
         return pd.DataFrame()
@@ -303,7 +334,50 @@ def build_bucket_board(
             how="left",
             validate="one_to_one",
         )
+    if edge_table is not None and not edge_table.empty and "ticker" in edge_table.columns:
+        edge_summary = _best_edge_by_ticker(edge_table)
+        if not edge_summary.empty:
+            board = board.merge(
+                edge_summary,
+                on="ticker",
+                how="left",
+                validate="one_to_one",
+            )
     return board.reset_index(drop=True)
+
+
+def _best_edge_by_ticker(edge_table: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "ticker",
+        "best_edge_action",
+        "best_net_edge",
+        "best_edge_status",
+        "best_no_trade_reason",
+    ]
+    if edge_table.empty or "ticker" not in edge_table.columns:
+        return pd.DataFrame(columns=columns)
+    working = edge_table.copy()
+    working["_candidate_rank"] = working["edge_status"].map(
+        lambda value: 0 if str(value) == "CANDIDATE" else 1
+    )
+    if "net_edge" in working.columns:
+        working["_net_edge_rank"] = pd.to_numeric(working["net_edge"], errors="coerce")
+    else:
+        working["_net_edge_rank"] = float("-inf")
+    working = working.sort_values(
+        ["ticker", "_candidate_rank", "_net_edge_rank"],
+        ascending=[True, True, False],
+        kind="stable",
+    )
+    best = working.groupby("ticker", sort=False).head(1).copy()
+    return best.rename(
+        columns={
+            "action": "best_edge_action",
+            "net_edge": "best_net_edge",
+            "edge_status": "best_edge_status",
+            "no_trade_reason": "best_no_trade_reason",
+        }
+    ).reindex(columns=columns)
 
 
 def save_dashboard_status(status: dict[str, Any], output_path: str | Path) -> None:
@@ -343,8 +417,13 @@ def _write_outputs(
         state.bucket_probabilities.to_csv(config.outputs.live_bucket_probabilities_path, index=False)
     if orderbook_snapshot is not None:
         save_orderbook_snapshot(orderbook_snapshot, config.outputs.orderbook_snapshot_path)
+        save_orderbook_summary(orderbook_snapshot, config.outputs.orderbook_summary_path)
     elif not state.orderbook.empty:
         state.orderbook.to_csv(config.outputs.orderbook_snapshot_path, index=False)
+    if not state.orderbook_summary.empty:
+        state.orderbook_summary.to_csv(config.outputs.orderbook_summary_path, index=False)
+    if not state.edge_table.empty:
+        save_edge_table(state.edge_table, config.outputs.edge_table_path)
     save_dashboard_status(state.status, config.outputs.dashboard_status_path)
 
 
@@ -495,14 +574,29 @@ def _weather_frame_for_state(weather: LiveWeatherSnapshot) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True, sort=False)
 
 
-def _summaries_from_orderbook(orderbook: pd.DataFrame) -> pd.DataFrame:
-    if orderbook.empty or "ticker" not in orderbook.columns:
+def _summaries_from_orderbook(orderbook: pd.DataFrame, config: TradingConfig | None = None) -> pd.DataFrame:
+    if orderbook.empty or "ticker" not in orderbook.columns or "fetched_at" not in orderbook.columns:
         return pd.DataFrame()
-    summaries = []
+    evaluated_at = datetime.now().astimezone()
+    summary_records: list[dict[str, Any]] = []
     for ticker, group in orderbook.groupby("ticker", sort=False):
         fetched_at = pd.to_datetime(group["fetched_at"].iloc[0]).to_pydatetime()
-        summaries.append(summarize_orderbook(group, ticker=str(ticker), fetched_at=fetched_at))
-    return pd.concat(summaries, ignore_index=True) if summaries else pd.DataFrame()
+        summary = (
+            summarize_orderbook(
+                group,
+                ticker=str(ticker),
+                fetched_at=fetched_at,
+                evaluated_at=evaluated_at,
+                max_staleness_seconds=(
+                    None if config is None else config.edge.max_staleness_seconds
+                ),
+                max_spread_dollars=(
+                    None if config is None else config.edge.max_spread_dollars
+                ),
+            )
+        )
+        summary_records.extend(summary.to_dict("records"))
+    return pd.DataFrame.from_records(summary_records) if summary_records else pd.DataFrame()
 
 
 def _read_csv(path: str | Path) -> pd.DataFrame:

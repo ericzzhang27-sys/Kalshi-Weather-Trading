@@ -60,6 +60,49 @@ def test_summarize_orderbook_computes_best_prices_and_spreads() -> None:
     assert row["yes_ask_depth"] == 7
 
 
+def test_summarize_orderbook_rejects_stale_book_when_threshold_is_supplied() -> None:
+    orderbook = normalize_orderbook(
+        "KXHIGHNY-26JUN02-B72.5",
+        {
+            "yes_dollars": [[0.40, 10]],
+            "no_dollars": [[0.55, 7]],
+        },
+        FETCHED_AT,
+    )
+
+    summary = summarize_orderbook(
+        orderbook,
+        "KXHIGHNY-26JUN02-B72.5",
+        FETCHED_AT,
+        evaluated_at=datetime(2026, 6, 3, 15, 40, tzinfo=timezone.utc),
+        max_staleness_seconds=300,
+    )
+
+    assert summary.iloc[0]["orderbook_status"] == "NO_TRADE"
+    assert summary.iloc[0]["orderbook_reason"] == "stale_orderbook"
+
+
+def test_summarize_orderbook_rejects_unusually_wide_spread() -> None:
+    orderbook = normalize_orderbook(
+        "KXHIGHNY-26JUN02-B72.5",
+        {
+            "yes_dollars": [[0.10, 10]],
+            "no_dollars": [[0.55, 7]],
+        },
+        FETCHED_AT,
+    )
+
+    summary = summarize_orderbook(
+        orderbook,
+        "KXHIGHNY-26JUN02-B72.5",
+        FETCHED_AT,
+        max_spread_dollars=0.25,
+    )
+
+    assert summary.iloc[0]["orderbook_status"] == "NO_TRADE"
+    assert summary.iloc[0]["orderbook_reason"] == "unusually_wide_orderbook"
+
+
 def test_empty_orderbook_has_empty_status() -> None:
     orderbook = normalize_orderbook("KXHIGHNY-26JUN02-B72.5", {"yes_dollars": [], "no_dollars": []}, FETCHED_AT)
     summary = summarize_orderbook(orderbook, "KXHIGHNY-26JUN02-B72.5", FETCHED_AT)

@@ -1,0 +1,5 @@
+fetched_at,evaluated_at,ticker,staleness_seconds,max_staleness_seconds,best_yes_bid,best_yes_bid_size,best_yes_ask,best_yes_ask_size,yes_spread,yes_midpoint,best_no_bid,best_no_bid_size,best_no_ask,best_no_ask_size,no_spread,no_midpoint,yes_bid_depth,yes_ask_depth,no_bid_depth,no_ask_depth,max_spread_dollars,orderbook_status,orderbook_reason
+2026-06-03T22:35:17.200235-04:00,2026-06-04T18:01:47.871196-04:00,KXHIGHNY-26JUN03-T76,69990.670961,300.0,,,0.01,2.0,,,0.99,2.0,,,,,0.0,45.2,45.2,0.0,0.25,NO_TRADE,stale_orderbook
+2026-06-03T22:35:17.200235-04:00,2026-06-04T18:01:47.871196-04:00,KXHIGHNY-26JUN03-B76.5,69990.670961,300.0,0.16,2.0,,,,,,,0.84,2.0,,,9988.41,0.0,0.0,9988.41,0.25,NO_TRADE,stale_orderbook
+2026-06-03T22:35:17.200235-04:00,2026-06-04T18:01:47.871196-04:00,KXHIGHNY-26JUN03-B78.5,69990.670961,300.0,0.01,9978.0,,,,,,,0.99,9978.0,,,9978.0,0.0,0.0,9978.0,0.25,NO_TRADE,stale_orderbook
+2026-06-03T22:35:17.200235-04:00,2026-06-04T18:01:47.871196-04:00,KXHIGHNY-26JUN03-B80.5,69990.670961,300.0,0.28,210.98,,,,,,,0.72,210.98,,,210.98,0.0,0.0,210.98,0.25,NO_TRADE,stale_orderbook

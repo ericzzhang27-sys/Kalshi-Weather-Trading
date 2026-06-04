@@ -87,6 +87,7 @@ def main() -> None:
         "Bucket Board",
         "Probability",
         "Order Book",
+        "Edge",
         "Feature Inspector",
         "Weather Inputs",
         "Audit Artifacts",
@@ -98,10 +99,12 @@ def main() -> None:
     with tabs[2]:
         _render_orderbook(st, px, state)
     with tabs[3]:
-        _render_features(st, px, state)
+        _render_edge(st, state)
     with tabs[4]:
-        _render_weather(st, px, state, config)
+        _render_features(st, px, state)
     with tabs[5]:
+        _render_weather(st, px, state, config)
+    with tabs[6]:
         _render_artifacts(st, state)
 
 
@@ -223,6 +226,9 @@ def _render_bucket_board(st, state: DashboardState) -> None:
             "no_spread",
             "yes_bid_depth",
             "yes_ask_depth",
+            "best_edge_action",
+            "best_net_edge",
+            "best_edge_status",
             "orderbook_status",
             "mapping_status",
         ]
@@ -289,6 +295,40 @@ def _render_orderbook(st, px, state: DashboardState) -> None:
     if not state.orderbook_summary.empty:
         st.markdown("#### Best Prices")
         st.dataframe(state.orderbook_summary, use_container_width=True, hide_index=True)
+
+
+def _render_edge(st, state: DashboardState) -> None:
+    st.subheader("Edge Table")
+    edge = state.edge_table.copy()
+    if edge.empty:
+        st.info("No edge table is available yet.")
+        return
+    candidates = edge[edge["edge_status"].astype(str) == "CANDIDATE"].copy()
+    cols = st.columns(3)
+    cols[0].metric("Candidates", len(candidates))
+    cols[1].metric("Rows", len(edge))
+    best_net_edge = candidates["net_edge"].max() if not candidates.empty else None
+    cols[2].metric("Best Net Edge", _fmt(best_net_edge) if best_net_edge is not None else "")
+    display_cols = [
+        column
+        for column in [
+            "ticker",
+            "bucket_name",
+            "action",
+            "fair_value",
+            "executable_price",
+            "executable_size",
+            "spread",
+            "gross_edge",
+            "fee_per_contract",
+            "slippage_buffer",
+            "net_edge",
+            "edge_status",
+            "no_trade_reason",
+        ]
+        if column in edge.columns
+    ]
+    st.dataframe(edge[display_cols], use_container_width=True, hide_index=True)
 
 
 def _render_features(st, px, state: DashboardState) -> None:
@@ -430,6 +470,8 @@ def _render_artifacts(st, state: DashboardState) -> None:
         "live_feature_freshness.csv": state.feature_freshness.to_csv(index=False),
         "live_bucket_probabilities.csv": state.bucket_probabilities.to_csv(index=False),
         "orderbook_snapshot.csv": state.orderbook.to_csv(index=False),
+        "orderbook_summary.csv": state.orderbook_summary.to_csv(index=False),
+        "edge_table.csv": state.edge_table.to_csv(index=False),
     }
     for name, payload in artifacts.items():
         mime = "application/json" if name.endswith(".json") else "text/csv"
@@ -443,7 +485,16 @@ def _render_artifacts(st, state: DashboardState) -> None:
 
 def _format_probability_columns(frame: pd.DataFrame) -> pd.DataFrame:
     result = frame.copy()
-    for column in ["probability", "best_yes_bid", "best_yes_ask", "yes_spread", "best_no_bid", "best_no_ask", "no_spread"]:
+    for column in [
+        "probability",
+        "best_yes_bid",
+        "best_yes_ask",
+        "yes_spread",
+        "best_no_bid",
+        "best_no_ask",
+        "no_spread",
+        "best_net_edge",
+    ]:
         if column in result.columns:
             result[column] = pd.to_numeric(result[column], errors="coerce").round(4)
     return result

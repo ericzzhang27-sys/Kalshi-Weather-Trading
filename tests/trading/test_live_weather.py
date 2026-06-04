@@ -271,6 +271,56 @@ def test_nws_station_observations_are_converted_to_feature_compatible_units() ->
     assert snapshot.no_trade is False
 
 
+def test_nws_daily_max_remark_does_not_inflate_intraday_high_so_far() -> None:
+    config = parse_trading_config({"weather": {"observations_provider": "nws_station"}})
+    forecast_client = FakeOpenMeteoClient([_forecast_payload()])
+    payload = {
+        "features": [
+            {
+                "properties": {
+                    "timestamp": "2026-06-02T04:51:00+00:00",
+                    "temperature": {"unitCode": "wmoUnit:degC", "value": 20.0},
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 10.0},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 50.0},
+                    "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 0.0},
+                    "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 101000},
+                    "precipitationLastHour": {"unitCode": "wmoUnit:mm", "value": 0.0},
+                    "cloudLayers": [{"amount": "CLR"}],
+                    "textDescription": "Clear",
+                    "rawMessage": "KNYC 020451Z AUTO RMK AO2 T02000100 403000100",
+                }
+            },
+            {
+                "properties": {
+                    "timestamp": "2026-06-02T12:51:00+00:00",
+                    "temperature": {"unitCode": "wmoUnit:degC", "value": 21.0},
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 10.0},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 45.0},
+                    "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 0.0},
+                    "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 101000},
+                    "precipitationLastHour": {"unitCode": "wmoUnit:mm", "value": 0.0},
+                    "cloudLayers": [{"amount": "CLR"}],
+                    "textDescription": "Clear",
+                    "rawMessage": "KNYC 021251Z AUTO RMK AO2 T02100100",
+                }
+            },
+        ]
+    }
+    snapshot = fetch_live_weather(
+        location="NYC",
+        target_date=date(2026, 6, 2),
+        prediction_time=datetime(2026, 6, 2, 9, 0),
+        config=config,
+        client=forecast_client,
+        observation_client=FakeNwsObservationClient(payload),
+        fetched_at=datetime(2026, 6, 2, 9, 0),
+    )
+
+    ordered = snapshot.hourly_observations.sort_values("timestamp")
+    assert ordered.iloc[0]["nws_24h_max_temp"] == 86.0
+    assert ordered.iloc[-1]["observed_high_so_far"] == 69.8
+
+
 def _nws_observation_payload():
     return {
         "features": [

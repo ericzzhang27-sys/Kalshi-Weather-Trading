@@ -77,6 +77,18 @@ weather:
 risk:
   kill_switch_path: runtime/KILL_SWITCH_TRADING
 
+edge:
+  min_edge_dollars: 0.02
+  min_edge_percent: 0.0
+  slippage_buffer_dollars: 0.005
+  min_liquidity_contracts: 1.0
+  max_spread_dollars: 0.25
+  max_staleness_seconds: 300
+  fee_rate: 0.07
+  evaluation_contracts: 1.0
+  trade_fee_rounding_increment: 0.0001
+  balance_rounding_increment: 0.01
+
 outputs:
   live_trading_dir: outputs/live_trading
   market_discovery_snapshot_path: outputs/live_trading/market_discovery_snapshot.csv
@@ -87,4 +99,6 @@ outputs:
   live_feature_freshness_path: outputs/live_trading/live_feature_freshness.csv
   live_bucket_probabilities_path: outputs/live_trading/live_bucket_probabilities.csv
   orderbook_snapshot_path: outputs/live_trading/orderbook_snapshot.csv
+  orderbook_summary_path: outputs/live_trading/orderbook_summary.csv
+  edge_table_path: outputs/live_trading/edge_table.csv
   dashboard_status_path: outputs/live_trading/dashboard_status.json

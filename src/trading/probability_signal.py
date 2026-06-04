@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from src.bucket_schema import TemperatureBucket
+from src.distribution_pricing import validate_bucket_probabilities
 from src.predict_distribution import (
     DEFAULT_CALIBRATION_CONFIG_PATH,
     DEFAULT_FEATURE_LIST_PATH,
@@ -50,8 +51,10 @@ def score_live_probabilities(
     prediction = engine.predict(feature_rows, buckets=buckets)
     probabilities = prediction.bucket_probabilities.copy()
     probabilities = _attach_tickers(probabilities, mapping_frame)
+    probabilities["model_path"] = prediction.diagnostics.model_path
     probabilities["probability_signal_status"] = "OK"
     probabilities["probability_signal_reason"] = ""
+    _validate_probability_signal(probabilities)
 
     return ProbabilitySignalResult(
         distribution_params=prediction.distribution_params,
@@ -150,6 +153,7 @@ def _attach_tickers(probabilities: pd.DataFrame, mapping_frame: pd.DataFrame) ->
             "sigma_scaling_alpha",
             "distribution_type",
             "model_name",
+            "model_path",
             "calibration_method",
             "probability_signal_status",
             "probability_signal_reason",
@@ -179,3 +183,15 @@ def _optional_float(value: Any) -> float | None:
     if value is None or pd.isna(value):
         return None
     return float(value)
+
+
+def _validate_probability_signal(probabilities: pd.DataFrame) -> None:
+    validate_bucket_probabilities(probabilities, tolerance=1e-6)
+    if "ticker" not in probabilities.columns:
+        raise ValueError("Probability signal output is missing ticker mappings")
+    missing_tickers = probabilities["ticker"].isna() | (probabilities["ticker"].astype(str).str.strip() == "")
+    if missing_tickers.any():
+        missing_buckets = sorted(
+            probabilities.loc[missing_tickers, "bucket_name"].dropna().astype(str).unique()
+        )
+        raise ValueError(f"Probability signal has buckets without mapped tickers: {missing_buckets}")

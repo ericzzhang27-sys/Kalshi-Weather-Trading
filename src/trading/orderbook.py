@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import math
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -24,7 +25,10 @@ ORDERBOOK_COLUMNS = [
 
 ORDERBOOK_SUMMARY_COLUMNS = [
     "fetched_at",
+    "evaluated_at",
     "ticker",
+    "staleness_seconds",
+    "max_staleness_seconds",
     "best_yes_bid",
     "best_yes_bid_size",
     "best_yes_ask",
@@ -41,6 +45,7 @@ ORDERBOOK_SUMMARY_COLUMNS = [
     "yes_ask_depth",
     "no_bid_depth",
     "no_ask_depth",
+    "max_spread_dollars",
     "orderbook_status",
     "orderbook_reason",
 ]
@@ -59,12 +64,16 @@ def fetch_orderbooks(
     depth: int = 20,
     auth: bool = False,
     fetched_at: datetime | None = None,
+    evaluated_at: datetime | None = None,
+    max_staleness_seconds: float | None = None,
+    max_spread_dollars: float | None = None,
 ) -> OrderbookSnapshot:
     """
     Fetch and normalize full order books for a list of market tickers.
     """
     unique_tickers = [ticker for ticker in dict.fromkeys(str(item) for item in tickers) if ticker]
     fetched_at_dt = fetched_at or datetime.now(timezone.utc)
+    evaluated_at_dt = evaluated_at or fetched_at_dt
     frames: list[pd.DataFrame] = []
     summaries: list[pd.DataFrame] = []
 
@@ -76,7 +85,16 @@ def fetch_orderbooks(
         )
         frame = normalize_orderbook(ticker, payload, fetched_at=fetched_at_dt)
         frames.append(frame)
-        summaries.append(summarize_orderbook(frame, ticker=ticker, fetched_at=fetched_at_dt))
+        summaries.append(
+            summarize_orderbook(
+                frame,
+                ticker=ticker,
+                fetched_at=fetched_at_dt,
+                evaluated_at=evaluated_at_dt,
+                max_staleness_seconds=max_staleness_seconds,
+                max_spread_dollars=max_spread_dollars,
+            )
+        )
 
     orderbook = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=ORDERBOOK_COLUMNS)
     summary = pd.concat(summaries, ignore_index=True) if summaries else pd.DataFrame(columns=ORDERBOOK_SUMMARY_COLUMNS)
@@ -130,11 +148,19 @@ def summarize_orderbook(
     orderbook: pd.DataFrame,
     ticker: str,
     fetched_at: datetime | None = None,
+    evaluated_at: datetime | None = None,
+    max_staleness_seconds: float | None = None,
+    max_spread_dollars: float | None = None,
 ) -> pd.DataFrame:
     fetched_at_dt = fetched_at or datetime.now(timezone.utc)
+    evaluated_at_dt = evaluated_at or fetched_at_dt
+    staleness_seconds = _seconds_between(fetched_at_dt, evaluated_at_dt)
     summary = {
         "fetched_at": fetched_at_dt.isoformat(),
+        "evaluated_at": evaluated_at_dt.isoformat(),
         "ticker": ticker,
+        "staleness_seconds": staleness_seconds,
+        "max_staleness_seconds": _optional_positive_float(max_staleness_seconds),
         "best_yes_bid": None,
         "best_yes_bid_size": None,
         "best_yes_ask": None,
@@ -151,6 +177,7 @@ def summarize_orderbook(
         "yes_ask_depth": 0.0,
         "no_bid_depth": 0.0,
         "no_ask_depth": 0.0,
+        "max_spread_dollars": _optional_positive_float(max_spread_dollars),
         "orderbook_status": "EMPTY",
         "orderbook_reason": "empty_orderbook",
     }
@@ -182,9 +209,26 @@ def summarize_orderbook(
         summary[f"{outcome}_spread"] is not None and summary[f"{outcome}_spread"] < -1e-9
         for outcome in ["yes", "no"]
     )
+    stale = (
+        summary["max_staleness_seconds"] is not None
+        and summary["staleness_seconds"] is not None
+        and summary["staleness_seconds"] > summary["max_staleness_seconds"]
+    )
+    wide = any(
+        summary[f"{outcome}_spread"] is not None
+        and summary["max_spread_dollars"] is not None
+        and summary[f"{outcome}_spread"] > summary["max_spread_dollars"] + 1e-9
+        for outcome in ["yes", "no"]
+    )
     if crossed:
         summary["orderbook_status"] = "NO_TRADE"
         summary["orderbook_reason"] = "crossed_orderbook"
+    elif stale:
+        summary["orderbook_status"] = "NO_TRADE"
+        summary["orderbook_reason"] = "stale_orderbook"
+    elif wide:
+        summary["orderbook_status"] = "NO_TRADE"
+        summary["orderbook_reason"] = "unusually_wide_orderbook"
     else:
         summary["orderbook_status"] = "OK"
         summary["orderbook_reason"] = ""
@@ -244,3 +288,24 @@ def _record(
         "cumulative_size": None,
         "source_book_side": source_book_side,
     }
+
+
+def _seconds_between(start: datetime, end: datetime) -> float:
+    start_dt = _ensure_aware_utc(start)
+    end_dt = _ensure_aware_utc(end)
+    return max(0.0, float((end_dt - start_dt).total_seconds()))
+
+
+def _ensure_aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _optional_positive_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    numeric = float(value)
+    if not math.isfinite(numeric) or numeric <= 0.0:
+        raise ValueError(f"Expected a positive finite value, got {value!r}")
+    return numeric
