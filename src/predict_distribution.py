@@ -254,7 +254,7 @@ def load_probability_engine(
 
     return ProbabilityEngine(
         model=model,
-        imputer=artifact_metadata.get("imputer"),
+        imputer=_repair_legacy_simple_imputer(artifact_metadata.get("imputer")),
         feature_columns=feature_columns,
         distribution_type=distribution,
         model_name=model_name,
@@ -489,7 +489,7 @@ def _prepare_feature_frame(
         if not np.isfinite(values).all():
             raise ValueError("Feature rows contain missing or infinite values and no imputer is available")
     else:
-        values = imputer.transform(cleaned)
+        values = _transform_with_imputer(imputer, cleaned)
 
     values = np.asarray(values, dtype=float)
     if values.shape != (len(rows), len(feature_columns)):
@@ -512,6 +512,64 @@ def _prepare_feature_frame(
         }
     )
     return feature_frame, diagnostics
+
+
+def _repair_legacy_simple_imputer(imputer: Any) -> Any:
+    """
+    Patch sklearn SimpleImputer artifacts pickled before newer private attrs existed.
+
+    Streamlit Cloud can install a newer scikit-learn than the one that created the
+    model artifact. Some newer SimpleImputer.transform paths expect _fill_dtype,
+    while older pickles only contain _fit_dtype. The imputer is numeric-only here,
+    so using the fit dtype preserves the trained imputation behavior.
+    """
+    if imputer is None or hasattr(imputer, "_fill_dtype"):
+        return imputer
+    fill_dtype = getattr(imputer, "_fit_dtype", None)
+    if fill_dtype is None and hasattr(imputer, "statistics_"):
+        try:
+            fill_dtype = np.asarray(imputer.statistics_).dtype
+        except Exception:
+            fill_dtype = None
+    if fill_dtype is not None:
+        try:
+            setattr(imputer, "_fill_dtype", fill_dtype)
+        except Exception:
+            pass
+    return imputer
+
+
+def _transform_with_imputer(imputer: Any, cleaned: pd.DataFrame) -> Any:
+    _repair_legacy_simple_imputer(imputer)
+    try:
+        return imputer.transform(cleaned)
+    except AttributeError as exc:
+        if "_fill_dtype" not in str(exc):
+            raise
+        _repair_legacy_simple_imputer(imputer)
+        return _manual_simple_imputer_transform(imputer, cleaned)
+
+
+def _manual_simple_imputer_transform(imputer: Any, cleaned: pd.DataFrame) -> np.ndarray:
+    if not hasattr(imputer, "statistics_"):
+        raise AttributeError("Imputer is missing statistics_")
+    if bool(getattr(imputer, "add_indicator", False)):
+        raise AttributeError("Manual SimpleImputer fallback does not support add_indicator=True")
+
+    statistics = np.asarray(imputer.statistics_, dtype=float)
+    values = cleaned.to_numpy(dtype=float)
+    if statistics.shape[0] != values.shape[1]:
+        raise ValueError(
+            "Imputer statistics shape does not match feature matrix: "
+            f"{statistics.shape[0]} vs {values.shape[1]}"
+        )
+    if np.isnan(statistics).any():
+        raise ValueError("Manual SimpleImputer fallback cannot drop all-missing feature columns")
+    missing = np.isnan(values)
+    if missing.any():
+        values = values.copy()
+        values[missing] = np.take(statistics, np.where(missing)[1])
+    return values
 
 
 def _apply_engine_sigma_adjustments(

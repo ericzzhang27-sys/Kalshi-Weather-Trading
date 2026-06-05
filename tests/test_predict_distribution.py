@@ -2,14 +2,19 @@ from __future__ import annotations
 
 from math import isclose
 from pathlib import Path
+import sys
 
 import numpy as np
 import pandas as pd
 import pytest
 from sklearn.impute import SimpleImputer
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from src.bucket_schema import make_integer_temperature_buckets
-from src.predict_distribution import ProbabilityEngine, save_prediction_outputs
+from src.predict_distribution import ProbabilityEngine, load_probability_engine, save_prediction_outputs
 
 
 class Normal:
@@ -26,10 +31,30 @@ class _FakeModel:
     Dist = Normal
 
     def pred_dist(self, X: pd.DataFrame) -> _FakePredictedDistribution:
+        if X.isna().any().any():
+            raise ValueError("Fake model received missing feature values")
         return _FakePredictedDistribution(
             loc=np.zeros(len(X), dtype=float),
             scale=np.ones(len(X), dtype=float),
         )
+
+
+class _LegacySimpleImputerLike:
+    add_indicator = False
+
+    def __init__(self) -> None:
+        self._fit_dtype = np.dtype("float64")
+        self.statistics_ = np.array([1.5, 3.5], dtype=float)
+
+    def transform(self, X: pd.DataFrame) -> np.ndarray:
+        if not hasattr(self, "_fill_dtype"):
+            raise AttributeError("'SimpleImputer' object has no attribute '_fill_dtype'")
+        values = X.to_numpy(dtype=float)
+        mask = np.isnan(values)
+        if mask.any():
+            values = values.copy()
+            values[mask] = np.take(self.statistics_, np.where(mask)[1])
+        return values
 
 
 def _fake_engine() -> ProbabilityEngine:
@@ -108,3 +133,35 @@ def test_save_prediction_outputs_writes_csv_and_schema(tmp_path: Path) -> None:
     assert output_path.exists()
     assert schema_path.exists()
     assert "Prediction Schema" in schema_path.read_text(encoding="utf-8")
+
+
+def test_load_probability_engine_repairs_legacy_simple_imputer_artifact() -> None:
+    engine = load_probability_engine()
+
+    assert engine.imputer is not None
+    assert hasattr(engine.imputer, "_fill_dtype")
+
+
+def test_probability_engine_repairs_missing_simple_imputer_fill_dtype() -> None:
+    imputer = _LegacySimpleImputerLike()
+    engine = ProbabilityEngine(
+        model=_FakeModel(),
+        imputer=imputer,
+        feature_columns=["feature_a", "feature_b"],
+        distribution_type="normal",
+        model_name="fake_ngboost",
+        model_path=Path("fake.pkl"),
+    )
+    rows = pd.DataFrame(
+        {
+            "forecast_high": [72.5],
+            "feature_a": [np.nan],
+            "feature_b": [2.0],
+        }
+    )
+
+    result = engine.predict(rows, buckets=make_integer_temperature_buckets(72, 74))
+
+    assert hasattr(imputer, "_fill_dtype")
+    assert result.diagnostics.total_feature_values_imputed_or_replaced == 1
+    assert result.bucket_probabilities["probability"].sum() == pytest.approx(1.0)

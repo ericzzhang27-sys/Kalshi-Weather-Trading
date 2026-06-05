@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 import pandas as pd
 import pytest
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from src.predict_distribution import EngineDiagnostics, PredictionResult
 from src.trading.contract_mapping import map_event_contracts
 from src.trading.probability_signal import score_live_probabilities
-
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_score_live_probabilities_against_saved_day2_row() -> None:
