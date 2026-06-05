@@ -106,6 +106,13 @@ def test_probability_context_summary_describes_prediction_inputs() -> None:
     assert any(row["Input"] == "Observed weather" for row in records)
 
 
+def test_bucket_board_hides_blocked_edges() -> None:
+    module = _load_dashboard_module()
+
+    assert module._format_edge("BUY_YES", 0.25, "CANDIDATE") == "BUY_YES (25.0c)"
+    assert module._format_edge("BUY_YES", 0.25, "NO_TRADE") == "--"
+
+
 def _load_dashboard_module():
     app_path = ROOT / "apps/live_trading_dashboard.py"
     spec = importlib.util.spec_from_file_location("live_trading_dashboard_app", app_path)

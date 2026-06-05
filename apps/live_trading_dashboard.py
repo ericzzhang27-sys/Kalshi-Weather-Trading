@@ -242,6 +242,7 @@ def _render_probability(st, px, state: DashboardState) -> None:
         return
 
     _render_probability_context(st, state)
+    _render_probability_status_note(st, probs)
 
     chart = px.bar(
         probs.sort_values("bucket_index") if "bucket_index" in probs.columns else probs,
@@ -262,6 +263,28 @@ def _render_probability(st, px, state: DashboardState) -> None:
         cols[2].metric("Distribution", str(params["distribution_type"].iloc[0]) if "distribution_type" in params else "")
         cols[3].metric("Model", str(params["model_name"].iloc[0]) if "model_name" in params else "")
     st.dataframe(probs, use_container_width=True, hide_index=True)
+
+
+def _render_probability_status_note(st, probs: pd.DataFrame) -> None:
+    if "probability_signal_status" in probs.columns:
+        statuses = set(probs["probability_signal_status"].dropna().astype(str))
+        if statuses and statuses != {"OK"}:
+            reasons = []
+            if "probability_signal_reason" in probs.columns:
+                reasons = sorted(
+                    str(value)
+                    for value in probs["probability_signal_reason"].dropna().unique()
+                    if str(value)
+                )
+            suffix = f" Reason: {'; '.join(reasons)}" if reasons else ""
+            st.warning(
+                "This probability distribution is diagnostic only; the trading signal is NO_TRADE."
+                + suffix
+            )
+    if "probability_constraint" in probs.columns and probs["probability_constraint"].notna().any():
+        st.info(
+            "Probabilities are constrained by observed high-so-far, so buckets below the already-observed high are forced to 0%."
+        )
 
 
 def _render_probability_context(st, state: DashboardState) -> None:
@@ -715,8 +738,12 @@ def _kalshi_bucket_board_display(board: pd.DataFrame) -> pd.DataFrame:
                 "Yes": _format_kalshi_button("Yes", yes_buy_price),
                 "No": _format_kalshi_button("No", no_buy_price),
                 "Model": _format_percent(row.get("probability")),
-                "Best Edge": _format_edge(row.get("best_edge_action"), row.get("best_net_edge")),
-                "Status": row.get("orderbook_status", ""),
+                "Best Edge": _format_edge(
+                    row.get("best_edge_action"),
+                    row.get("best_net_edge"),
+                    row.get("best_edge_status"),
+                ),
+                "Status": _format_board_status(row),
                 "Ticker": row.get("ticker", ""),
             }
         )
@@ -781,12 +808,23 @@ def _format_kalshi_button(label: str, price: Any) -> str:
     return f"{label} {cents}c"
 
 
-def _format_edge(action: Any, net_edge: Any) -> str:
+def _format_edge(action: Any, net_edge: Any, edge_status: Any = "CANDIDATE") -> str:
+    if str(edge_status or "").strip() not in {"", "CANDIDATE"}:
+        return "--"
     action_text = str(action or "").strip()
     edge = _coalesce_numeric(net_edge)
     if not action_text or edge is None:
         return "--"
     return f"{action_text} ({edge * 100:.1f}c)"
+
+
+def _format_board_status(row: pd.Series) -> str:
+    orderbook_status = str(row.get("orderbook_status", "") or "").strip()
+    edge_status = str(row.get("best_edge_status", "") or "").strip()
+    reason = str(row.get("best_no_trade_reason", "") or "").strip()
+    if edge_status and edge_status != "CANDIDATE":
+        return f"{edge_status}: {reason}" if reason else edge_status
+    return orderbook_status or edge_status or ""
 
 
 def _coalesce_numeric(*values: Any) -> float | None:

@@ -51,6 +51,7 @@ def score_live_probabilities(
     prediction = engine.predict(feature_rows, buckets=buckets)
     probabilities = prediction.bucket_probabilities.copy()
     probabilities = _attach_tickers(probabilities, mapping_frame)
+    probabilities = _apply_observed_high_floor(probabilities, feature_rows)
     probabilities["model_path"] = prediction.diagnostics.model_path
     signal_status, signal_reason = _signal_status_from_feature_rows(feature_rows)
     probabilities["probability_signal_status"] = signal_status
@@ -156,6 +157,9 @@ def _attach_tickers(probabilities: pd.DataFrame, mapping_frame: pd.DataFrame) ->
             "model_name",
             "model_path",
             "calibration_method",
+            "unconstrained_probability",
+            "probability_constraint",
+            "observed_high_floor",
             "probability_signal_status",
             "probability_signal_reason",
         ]
@@ -180,6 +184,68 @@ def _signal_status_from_feature_rows(feature_rows: pd.DataFrame) -> tuple[str, s
         if str(reason).strip()
     ]
     return "NO_TRADE", ";".join(reasons) or "live_feature_no_trade"
+
+
+def _apply_observed_high_floor(
+    probabilities: pd.DataFrame,
+    feature_rows: pd.DataFrame,
+) -> pd.DataFrame:
+    if (
+        probabilities.empty
+        or "max_temp_so_far" not in feature_rows.columns
+        or "probability" not in probabilities.columns
+        or "bucket_upper_temp" not in probabilities.columns
+    ):
+        return probabilities
+    if "row_id" not in probabilities.columns or "row_id" not in feature_rows.columns:
+        return probabilities
+
+    high_by_row = (
+        feature_rows[["row_id", "max_temp_so_far"]]
+        .dropna(subset=["row_id"])
+        .drop_duplicates("row_id", keep="last")
+        .set_index("row_id")["max_temp_so_far"]
+        .map(_optional_float)
+        .dropna()
+        .to_dict()
+    )
+    if not high_by_row:
+        return probabilities
+
+    result = probabilities.copy()
+    result["probability"] = pd.to_numeric(result["probability"], errors="coerce")
+    result["bucket_upper_temp"] = pd.to_numeric(result["bucket_upper_temp"], errors="coerce")
+    result["observed_high_floor"] = result["row_id"].map(high_by_row)
+    applied_any = False
+
+    for row_id, observed_high in high_by_row.items():
+        group_index = result.index[result["row_id"] == row_id]
+        if group_index.empty:
+            continue
+        upper = result.loc[group_index, "bucket_upper_temp"]
+        impossible = upper.notna() & (upper < float(observed_high) - 1e-9)
+        if not impossible.any():
+            continue
+
+        applied_any = True
+        if "unconstrained_probability" not in result.columns:
+            result["unconstrained_probability"] = result["probability"]
+        result.loc[group_index[impossible], "probability"] = 0.0
+        remaining_sum = float(result.loc[group_index, "probability"].sum())
+        if remaining_sum > 0.0:
+            result.loc[group_index, "probability"] = (
+                result.loc[group_index, "probability"] / remaining_sum
+            )
+        else:
+            possible_index = group_index[~impossible]
+            if not possible_index.empty:
+                result.loc[group_index, "probability"] = 0.0
+                result.loc[possible_index[0], "probability"] = 1.0
+        result.loc[group_index, "probability_constraint"] = "observed_high_floor"
+
+    if not applied_any:
+        result = result.drop(columns=["observed_high_floor"], errors="ignore")
+    return result
 
 
 def _sort_mapping_for_buckets(frame: pd.DataFrame) -> pd.DataFrame:
