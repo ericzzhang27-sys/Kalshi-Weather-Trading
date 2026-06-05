@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any
 
@@ -12,6 +14,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.trading.config import DEFAULT_TRADING_CONFIG_PATH, load_trading_config  # noqa: E402
+from src.predict_distribution import DEFAULT_FEATURE_LIST_PATH, DEFAULT_MODEL_PATH  # noqa: E402
 from src.trading.dashboard_data import (  # noqa: E402
     DashboardState,
     load_dashboard_state,
@@ -199,6 +202,16 @@ def _render_status(st, state: DashboardState) -> None:
     cols[5].metric("Prob Rows", status.get("probability_rows", 0))
 
     st.caption(f"Refreshed at: {status.get('refreshed_at', '')} | Data source: {status.get('data_source', '')} | Read-only: {status.get('read_only', True)}")
+    st.caption(
+        " | ".join(
+            [
+                f"Revision: {_app_revision()}",
+                f"Feature Rows: {status.get('feature_rows', len(state.live_feature_rows))}",
+                f"Edge Rows: {status.get('edge_rows', len(getattr(state, 'edge_table', pd.DataFrame())))}",
+                f"Scoring: {status.get('probability_scoring_status', 'OK')}",
+            ]
+        )
+    )
     warnings = status.get("warnings", [])
     if warnings:
         st.warning("Warnings: " + "; ".join(str(item) for item in warnings))
@@ -218,7 +231,14 @@ def _render_probability(st, px, state: DashboardState) -> None:
     st.subheader("Predicted Probability Distribution")
     probs = state.bucket_probabilities.copy()
     if probs.empty:
-        st.info("No live bucket probabilities are available yet.")
+        if not state.live_feature_rows.empty:
+            st.error("Feature rows are present, but probability scoring did not produce rows.")
+            _render_scoring_diagnostics(st, state)
+        elif state.status.get("live_feature_error"):
+            st.error("Live feature building failed before probability scoring could run.")
+            _render_scoring_diagnostics(st, state)
+        else:
+            st.info("No live bucket probabilities are available yet.")
         return
 
     chart = px.bar(
@@ -278,7 +298,11 @@ def _render_edge(st, state: DashboardState) -> None:
     st.subheader("Edge Table")
     edge = getattr(state, "edge_table", pd.DataFrame()).copy()
     if edge.empty:
-        st.info("No edge table is available yet.")
+        if state.bucket_probabilities.empty and not state.live_feature_rows.empty:
+            st.info("No edge table is available because probability scoring did not produce rows.")
+            _render_scoring_diagnostics(st, state)
+        else:
+            st.info("No edge table is available yet.")
         return
     candidates = edge[edge["edge_status"].astype(str) == "CANDIDATE"].copy()
     cols = st.columns(3)
@@ -306,6 +330,35 @@ def _render_edge(st, state: DashboardState) -> None:
         if column in edge.columns
     ]
     st.dataframe(edge[display_cols], use_container_width=True, hide_index=True)
+
+
+def _render_scoring_diagnostics(st, state: DashboardState) -> None:
+    status = state.status
+    scoring_error = str(status.get("probability_scoring_error", "") or "")
+    feature_error = str(status.get("live_feature_error", "") or "")
+    if scoring_error:
+        st.code(scoring_error)
+    elif feature_error:
+        st.code(feature_error)
+    warnings = [
+        str(item)
+        for item in status.get("warnings", [])
+        if "probability_scoring" in str(item)
+    ]
+    diagnostics = {
+        "app_revision": _app_revision(),
+        "live_feature_status": status.get("live_feature_status", ""),
+        "scoring_status": status.get("probability_scoring_status", ""),
+        "feature_rows": len(state.live_feature_rows),
+        "probability_rows": len(state.bucket_probabilities),
+        "edge_rows": len(getattr(state, "edge_table", pd.DataFrame())),
+        "warning": "; ".join(warnings),
+        "default_model_path": str(DEFAULT_MODEL_PATH),
+        "default_model_exists": DEFAULT_MODEL_PATH.exists(),
+        "feature_list_path": str(DEFAULT_FEATURE_LIST_PATH),
+        "feature_list_exists": DEFAULT_FEATURE_LIST_PATH.exists(),
+    }
+    st.dataframe(pd.DataFrame([diagnostics]), use_container_width=True, hide_index=True)
 
 
 def _render_features(st, px, state: DashboardState) -> None:
@@ -868,6 +921,26 @@ def _fmt(value: Any) -> str:
         return f"{float(value):.4f}"
     except (TypeError, ValueError):
         return str(value)
+
+
+def _app_revision() -> str:
+    for name in ("GIT_COMMIT", "SOURCE_VERSION", "COMMIT_SHA", "STREAMLIT_GIT_COMMIT"):
+        value = os.environ.get(name)
+        if value:
+            return value[:12]
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except Exception:
+        return "unknown"
+    revision = result.stdout.strip()
+    return revision or "unknown"
 
 
 def _inject_styles(st) -> None:

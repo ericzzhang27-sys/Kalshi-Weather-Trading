@@ -142,7 +142,8 @@ def load_dashboard_state(
     feature_rows = pd.DataFrame()
     feature_freshness = pd.DataFrame()
     probability_result: ProbabilitySignalResult | None = None
-    probability_warning = ""
+    live_feature_error = ""
+    probability_error = ""
     try:
         weather = fetch_live_weather(
             location=config.markets.default_location,
@@ -159,9 +160,13 @@ def load_dashboard_state(
         )
         freshness = feature_rows.attrs.get("freshness")
         feature_freshness = freshness if isinstance(freshness, pd.DataFrame) else pd.DataFrame()
-        probability_result = score_live_probabilities(feature_rows, mapping_result)
     except Exception as exc:
-        probability_warning = f"live_feature_scoring_unavailable:{exc}"
+        live_feature_error = f"{type(exc).__name__}: {exc}"
+    if not feature_rows.empty:
+        try:
+            probability_result = score_live_probabilities(feature_rows, mapping_result)
+        except Exception as exc:
+            probability_error = f"{type(exc).__name__}: {exc}"
 
     bucket_probabilities = (
         probability_result.bucket_probabilities
@@ -188,7 +193,8 @@ def load_dashboard_state(
         weather,
         feature_rows,
         orderbook_snapshot,
-        probability_warning=probability_warning,
+        live_feature_error=live_feature_error,
+        probability_error=probability_error,
     )
     status = _status_dict(
         config=config,
@@ -200,6 +206,10 @@ def load_dashboard_state(
         model_name=probability_result.diagnostics.model_name if probability_result is not None else "",
         model_path=probability_result.diagnostics.model_path if probability_result is not None else "",
         probability_rows=len(bucket_probabilities),
+        feature_rows=len(feature_rows),
+        edge_rows=len(edge_table),
+        live_feature_error=live_feature_error,
+        probability_scoring_error=probability_error,
     )
     bucket_board = build_bucket_board(
         mapping_result.mapping,
@@ -279,6 +289,8 @@ def load_dashboard_state_from_artifacts(config: TradingConfig) -> DashboardState
         model_name=model_name,
         model_path=model_path,
         probability_rows=len(probabilities),
+        feature_rows=len(features),
+        edge_rows=len(edge_table),
     )
     return DashboardState(
         status=status,
@@ -432,13 +444,16 @@ def _state_warnings(
     weather: LiveWeatherSnapshot | None,
     feature_rows: pd.DataFrame,
     orderbook: OrderbookSnapshot,
-    probability_warning: str = "",
+    live_feature_error: str = "",
+    probability_error: str = "",
 ) -> list[str]:
     warnings: list[str] = []
     if not mapping.validation.valid:
         warnings.append(mapping.validation.no_trade_reason)
-    if probability_warning:
-        warnings.append(probability_warning)
+    if live_feature_error:
+        warnings.append(f"live_feature_scoring_unavailable:{live_feature_error}")
+    if probability_error:
+        warnings.append(f"probability_scoring_unavailable:{probability_error}")
     if weather is not None and not weather.diagnostics.empty:
         for _, row in weather.diagnostics[weather.diagnostics["status"].isin(["WARN", "NO_TRADE"])].iterrows():
             reason = str(row.get("no_trade_reason", "") or row.get("diagnostic_name", ""))
@@ -491,7 +506,14 @@ def _status_dict(
     model_name: str | None = None,
     model_path: str | None = None,
     probability_rows: int = 0,
+    feature_rows: int = 0,
+    edge_rows: int = 0,
+    live_feature_error: str = "",
+    probability_scoring_error: str = "",
 ) -> dict[str, Any]:
+    scoring_status = "ERROR" if probability_scoring_error else "OK"
+    if live_feature_error and not probability_scoring_error:
+        scoring_status = "NOT_RUN"
     return {
         "mode": config.mode,
         "kalshi_env": config.kalshi.env,
@@ -504,10 +526,16 @@ def _status_dict(
         "model_name": model_name or "",
         "model_path": model_path or "",
         "probability_rows": int(probability_rows),
+        "feature_rows": int(feature_rows),
+        "edge_rows": int(edge_rows),
         "warning_count": len(warnings),
         "warnings": warnings,
         "dashboard_status": "WARN" if warnings else "OK",
         "read_only": True,
+        "live_feature_status": "ERROR" if live_feature_error else "OK",
+        "live_feature_error": live_feature_error,
+        "probability_scoring_status": scoring_status,
+        "probability_scoring_error": probability_scoring_error,
     }
 
 

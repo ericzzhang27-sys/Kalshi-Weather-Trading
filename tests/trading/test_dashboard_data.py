@@ -2,10 +2,16 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from pathlib import Path
+import sys
 
 import pandas as pd
 import pytest
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import src.trading.dashboard_data as dashboard_data
 from src.trading.config import load_trading_config, parse_trading_config
 from src.trading.dashboard_data import (
     build_bucket_board,
@@ -13,9 +19,6 @@ from src.trading.dashboard_data import (
     load_dashboard_state_from_artifacts,
     _select_event_ticker,
 )
-
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 class FakeKalshiClient:
@@ -175,6 +178,38 @@ def test_load_dashboard_state_keeps_live_orderbooks_when_features_are_not_scorea
     assert not state.orderbook.empty
     assert len(state.bucket_board) == 6
     assert state.bucket_board["best_yes_bid"].notna().all()
+
+
+def test_load_dashboard_state_records_probability_scoring_error_after_features(monkeypatch) -> None:
+    def broken_score(*args, **kwargs):
+        raise RuntimeError("model unavailable")
+
+    monkeypatch.setattr(dashboard_data, "score_live_probabilities", broken_score)
+    config = parse_trading_config({"weather": {"observations_provider": "open_meteo"}})
+
+    state = load_dashboard_state(
+        config,
+        event_ticker="KXHIGHNY-26JUN02",
+        target_date=date(2026, 6, 2),
+        depth=5,
+        kalshi_client=FakeKalshiClient(),
+        weather_client=FakeOpenMeteoClient(),
+        prediction_time=datetime(2026, 6, 2, 12, 0),
+        write_outputs=False,
+    )
+
+    assert not state.live_feature_rows.empty
+    assert state.bucket_probabilities.empty
+    assert state.edge_table.empty
+    assert state.status["feature_rows"] == len(state.live_feature_rows)
+    assert state.status["probability_rows"] == 0
+    assert state.status["edge_rows"] == 0
+    assert state.status["probability_scoring_status"] == "ERROR"
+    assert state.status["probability_scoring_error"] == "RuntimeError: model unavailable"
+    assert any(
+        "probability_scoring_unavailable:RuntimeError: model unavailable" == item
+        for item in state.status["warnings"]
+    )
 
 
 def _markets() -> list[dict[str, object]]:
