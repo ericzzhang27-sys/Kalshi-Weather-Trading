@@ -45,16 +45,13 @@ class _LegacySimpleImputerLike:
     def __init__(self) -> None:
         self._fit_dtype = np.dtype("float64")
         self.statistics_ = np.array([1.5, 3.5], dtype=float)
+        self.transform_calls = 0
 
     def transform(self, X: pd.DataFrame) -> np.ndarray:
+        self.transform_calls += 1
         if not hasattr(self, "_fill_dtype"):
             raise AttributeError("'SimpleImputer' object has no attribute '_fill_dtype'")
-        values = X.to_numpy(dtype=float)
-        mask = np.isnan(values)
-        if mask.any():
-            values = values.copy()
-            values[mask] = np.take(self.statistics_, np.where(mask)[1])
-        return values
+        raise AssertionError("Manual imputer fallback should avoid sklearn transform")
 
 
 def _fake_engine() -> ProbabilityEngine:
@@ -163,5 +160,6 @@ def test_probability_engine_repairs_missing_simple_imputer_fill_dtype() -> None:
     result = engine.predict(rows, buckets=make_integer_temperature_buckets(72, 74))
 
     assert hasattr(imputer, "_fill_dtype")
+    assert imputer.transform_calls == 0
     assert result.diagnostics.total_feature_values_imputed_or_replaced == 1
     assert result.bucket_probabilities["probability"].sum() == pytest.approx(1.0)

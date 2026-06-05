@@ -541,6 +541,8 @@ def _repair_legacy_simple_imputer(imputer: Any) -> Any:
 
 def _transform_with_imputer(imputer: Any, cleaned: pd.DataFrame) -> Any:
     _repair_legacy_simple_imputer(imputer)
+    if _can_use_manual_simple_imputer_transform(imputer, cleaned):
+        return _manual_simple_imputer_transform(imputer, cleaned)
     try:
         return imputer.transform(cleaned)
     except AttributeError as exc:
@@ -548,6 +550,18 @@ def _transform_with_imputer(imputer: Any, cleaned: pd.DataFrame) -> Any:
             raise
         _repair_legacy_simple_imputer(imputer)
         return _manual_simple_imputer_transform(imputer, cleaned)
+
+
+def _can_use_manual_simple_imputer_transform(imputer: Any, cleaned: pd.DataFrame) -> bool:
+    if not hasattr(imputer, "statistics_"):
+        return False
+    if bool(getattr(imputer, "add_indicator", False)):
+        return False
+    try:
+        statistics = np.asarray(imputer.statistics_, dtype=float)
+    except Exception:
+        return False
+    return statistics.shape == (cleaned.shape[1],) and not np.isnan(statistics).any()
 
 
 def _manual_simple_imputer_transform(imputer: Any, cleaned: pd.DataFrame) -> np.ndarray:
