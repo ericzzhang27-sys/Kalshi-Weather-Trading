@@ -241,6 +241,8 @@ def _render_probability(st, px, state: DashboardState) -> None:
             st.info("No live bucket probabilities are available yet.")
         return
 
+    _render_probability_context(st, state)
+
     chart = px.bar(
         probs.sort_values("bucket_index") if "bucket_index" in probs.columns else probs,
         x="bucket_name",
@@ -260,6 +262,95 @@ def _render_probability(st, px, state: DashboardState) -> None:
         cols[2].metric("Distribution", str(params["distribution_type"].iloc[0]) if "distribution_type" in params else "")
         cols[3].metric("Model", str(params["model_name"].iloc[0]) if "model_name" in params else "")
     st.dataframe(probs, use_container_width=True, hide_index=True)
+
+
+def _render_probability_context(st, state: DashboardState) -> None:
+    summary = _probability_context_summary(state)
+    prediction_time = summary.get("prediction_time", "")
+    refreshed_at = summary.get("refreshed_at", "")
+    data_source = summary.get("data_source", "")
+    model_name = summary.get("model_name", "")
+    st.caption(
+        "Prediction made at "
+        f"{prediction_time or 'unknown time'} using {data_source or 'unknown'} data; "
+        f"dashboard refreshed at {refreshed_at or 'unknown time'}."
+    )
+    cols = st.columns(4)
+    cols[0].metric("Prediction Time", prediction_time or "--")
+    cols[1].metric("Observed Data Through", summary.get("observations_through", "") or "--")
+    cols[2].metric("Forecast Data Through", summary.get("forecast_through", "") or "--")
+    cols[3].metric("Model", model_name or "--")
+
+    records = _probability_context_records(summary)
+    if records:
+        with st.expander("Prediction input timestamps"):
+            st.dataframe(pd.DataFrame.from_records(records), use_container_width=True, hide_index=True)
+
+
+def _probability_context_summary(state: DashboardState) -> dict[str, Any]:
+    status = state.status
+    probs = state.bucket_probabilities.copy()
+    features = state.live_feature_rows.copy()
+    weather = state.live_weather.copy()
+    freshness = state.feature_freshness.copy()
+    obs = _filter_source_role(weather, "hourly_observations")
+    forecasts = _filter_source_role(weather, "hourly_forecasts")
+    daily = _filter_source_role(weather, "daily_forecast")
+
+    prediction_time = _first_nonempty_from_frames(
+        [probs, features],
+        ["prediction_time", "prediction_timestamp"],
+    )
+    refreshed_at = str(status.get("refreshed_at", "") or "")
+    target_date = str(status.get("target_date", "") or "")[:10]
+    daily_target = _weather_for_target_date(daily, target_date)
+    forecast_high = _first_nonempty_from_frames([features, probs, daily_target], ["forecast_high"])
+    observed_high_source = _max_timestamp(obs, "observed_high_so_far_source_time") or _freshness_source_time(
+        freshness,
+        "max_temp_so_far",
+    )
+
+    return {
+        "prediction_time": _format_context_time(prediction_time),
+        "refreshed_at": _format_context_time(refreshed_at),
+        "data_source": str(status.get("data_source", "") or ""),
+        "event_ticker": str(status.get("event_ticker", "") or ""),
+        "target_date": target_date,
+        "model_name": _first_nonempty_from_frames([probs], ["model_name"]) or str(status.get("model_name", "") or ""),
+        "distribution_type": _first_nonempty_from_frames([probs], ["distribution_type"]),
+        "calibration_method": _first_nonempty_from_frames([probs], ["calibration_method"]),
+        "weather_status": _first_nonempty_from_frames([features], ["weather_status"]),
+        "feature_status": _first_nonempty_from_frames([features], ["live_feature_status"]),
+        "no_trade_reason": _first_nonempty_from_frames([features], ["no_trade_reason"]),
+        "forecast_high": _format_numeric_context(forecast_high),
+        "current_temp": _format_numeric_context(_first_nonempty_from_frames([features], ["current_temp"])),
+        "observed_high_so_far": _format_numeric_context(_first_nonempty_from_frames([features], ["max_temp_so_far"])),
+        "observed_high_source_time": _format_context_time(observed_high_source),
+        "observations_through": _format_context_time(_max_timestamp(obs, "timestamp")),
+        "observation_source": _first_nonempty_from_frames([obs], ["forecast_source", "provider_station_name"]),
+        "forecast_through": _format_context_time(_max_timestamp(forecasts, "timestamp")),
+        "forecast_source": _first_nonempty_from_frames([forecasts, daily], ["forecast_source"]),
+        "forecast_issue_time": _format_context_time(
+            _first_nonempty_from_frames([forecasts, daily], ["forecast_issue_time"])
+        ),
+        "feature_source_latest": _format_context_time(_max_timestamp(freshness, "source_time")),
+    }
+
+
+def _probability_context_records(summary: dict[str, Any]) -> list[dict[str, str]]:
+    rows = [
+        ("Prediction", summary.get("prediction_time", ""), summary.get("data_source", ""), "Model was scored at this point in time."),
+        ("Dashboard refresh", summary.get("refreshed_at", ""), summary.get("event_ticker", ""), "App refresh that produced this view."),
+        ("Observed weather", summary.get("observations_through", ""), summary.get("observation_source", ""), "Latest observation available to the feature row."),
+        ("Observed high source", summary.get("observed_high_source_time", ""), summary.get("observed_high_so_far", ""), "Timestamp/value used for high-so-far."),
+        ("Forecast weather", summary.get("forecast_through", ""), summary.get("forecast_source", ""), f"Daily forecast high {summary.get('forecast_high', '')}."),
+        ("Forecast issue", summary.get("forecast_issue_time", ""), summary.get("calibration_method", ""), "Forecast provider issue/run timestamp, if available."),
+        ("Feature freshness", summary.get("feature_source_latest", ""), summary.get("feature_status", ""), summary.get("no_trade_reason", "")),
+    ]
+    return [
+        {"Input": label, "Timestamp": timestamp or "--", "Source / Value": source or "--", "Note": note or "--"}
+        for label, timestamp, source, note in rows
+    ]
 
 
 def _render_orderbook(st, px, state: DashboardState) -> None:
@@ -707,6 +798,61 @@ def _coalesce_numeric(*values: Any) -> float | None:
         if pd.notna(numeric):
             return numeric
     return None
+
+
+def _first_nonempty_from_frames(frames: list[pd.DataFrame], columns: list[str]) -> Any:
+    for frame in frames:
+        if frame.empty:
+            continue
+        for column in columns:
+            if column not in frame.columns:
+                continue
+            values = frame[column].dropna()
+            if values.empty:
+                continue
+            for value in values:
+                if str(value).strip():
+                    return value
+    return ""
+
+
+def _freshness_source_time(freshness: pd.DataFrame, feature: str) -> Any:
+    if freshness.empty or not {"feature", "source_time"}.issubset(freshness.columns):
+        return ""
+    rows = freshness[freshness["feature"].astype(str) == feature]
+    return _first_nonempty_from_frames([rows], ["source_time"])
+
+
+def _max_timestamp(frame: pd.DataFrame, column: str) -> Any:
+    if frame.empty or column not in frame.columns:
+        return ""
+    times = pd.to_datetime(frame[column], errors="coerce")
+    times = times[times.notna()]
+    if times.empty:
+        return ""
+    return times.max()
+
+
+def _format_context_time(value: Any) -> str:
+    if value is None:
+        return ""
+    raw = str(value).strip()
+    if not raw or raw.lower() in {"nan", "nat", "none"}:
+        return ""
+    try:
+        timestamp = pd.Timestamp(value)
+    except (TypeError, ValueError):
+        return raw
+    if pd.isna(timestamp):
+        return ""
+    return timestamp.isoformat(sep=" ", timespec="seconds")
+
+
+def _format_numeric_context(value: Any) -> str:
+    numeric = _coalesce_numeric(value)
+    if numeric is None:
+        return ""
+    return f"{numeric:.2f}"
 
 
 def _filter_source_role(frame: pd.DataFrame, source_role: str) -> pd.DataFrame:
