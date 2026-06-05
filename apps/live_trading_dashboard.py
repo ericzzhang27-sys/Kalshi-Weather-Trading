@@ -496,15 +496,7 @@ def _render_artifacts(st, state: DashboardState, config) -> None:
         "orderbook_summary.csv": orderbook_summary.to_csv(index=False),
         "edge_table.csv": edge_table.to_csv(index=False),
     }
-    for name, path in {
-        "portfolio_snapshot.csv": config.outputs.portfolio_snapshot_path,
-        "risk_decisions.csv": config.outputs.risk_decisions_path,
-        "order_intents.csv": config.outputs.order_intents_path,
-        "paper_orders.csv": config.outputs.paper_orders_path,
-        "paper_positions.csv": config.outputs.paper_positions_path,
-        "paper_pnl.csv": config.outputs.paper_pnl_path,
-        "trading_cycle_log.csv": config.outputs.trading_cycle_log_path,
-    }.items():
+    for name, path in _day4_artifact_paths(config).items():
         payload = _read_artifact_text(path)
         if payload is not None:
             artifacts[name] = payload
@@ -518,11 +510,32 @@ def _render_artifacts(st, state: DashboardState, config) -> None:
         )
 
 
+def _day4_artifact_paths(config) -> dict[str, Path]:
+    outputs = config.outputs
+    output_dir = Path(getattr(outputs, "live_trading_dir", REPO_ROOT / "outputs" / "live_trading"))
+    specs = {
+        "portfolio_snapshot.csv": "portfolio_snapshot_path",
+        "risk_decisions.csv": "risk_decisions_path",
+        "order_intents.csv": "order_intents_path",
+        "paper_orders.csv": "paper_orders_path",
+        "paper_positions.csv": "paper_positions_path",
+        "paper_pnl.csv": "paper_pnl_path",
+        "trading_cycle_log.csv": "trading_cycle_log_path",
+    }
+    return {
+        name: Path(getattr(outputs, attr, output_dir / name))
+        for name, attr in specs.items()
+    }
+
+
 def _read_artifact_text(path: str | Path) -> str | None:
     candidate = Path(path)
     if not candidate.exists():
         return None
-    return candidate.read_text(encoding="utf-8")
+    try:
+        return candidate.read_text(encoding="utf-8")
+    except OSError:
+        return None
 
 
 def _format_probability_columns(frame: pd.DataFrame) -> pd.DataFrame:
