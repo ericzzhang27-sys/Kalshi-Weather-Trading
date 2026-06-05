@@ -24,6 +24,14 @@ class FakeOpenMeteoClient:
         return self.payloads.pop(0)
 
 
+class FakeNwsObservationClient:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def fetch_observations(self, station_id, *, start, end, limit=500):
+        return self.payload
+
+
 def _observation_payload():
     times = [
         "2026-06-02T06:00",
@@ -243,6 +251,30 @@ def test_probability_engine_accepts_live_feature_row() -> None:
     assert params["sigma"].iloc[0] > 0
 
 
+def test_stale_nws_observations_fall_back_to_proxy_features() -> None:
+    config = parse_trading_config({"weather": {"observations_provider": "nws_station"}})
+    client = FakeOpenMeteoClient([_forecast_payload(), _observation_payload()])
+    weather = fetch_live_weather(
+        location="NYC",
+        target_date=date(2026, 6, 2),
+        prediction_time=datetime(2026, 6, 2, 12, 0),
+        config=config,
+        client=client,
+        observation_client=FakeNwsObservationClient(_stale_nws_payload()),
+    )
+
+    rows = build_live_feature_rows(
+        weather=weather,
+        mapping=_mapping(),
+        feature_list_path=DEFAULT_FEATURE_LIST_PATH,
+    )
+
+    assert len(rows) == 1
+    assert weather.hourly_observations["forecast_source"].iloc[-1] == "open_meteo_observation_fallback"
+    assert rows["live_feature_status"].iloc[0] == "NO_TRADE"
+    assert "nws_station_observation_fallback" in rows["no_trade_reason"].iloc[0]
+
+
 def test_day2_script_dry_run_writes_expected_outputs(tmp_path) -> None:
     mapping_path = tmp_path / "mapping.csv"
     weather_path = tmp_path / "weather.csv"
@@ -275,3 +307,25 @@ def test_day2_script_dry_run_writes_expected_outputs(tmp_path) -> None:
     assert weather_path.exists()
     assert features_path.exists()
     assert freshness_path.exists()
+
+
+def _stale_nws_payload():
+    return {
+        "features": [
+            {
+                "properties": {
+                    "timestamp": "2026-06-02T10:00:00+00:00",
+                    "temperature": {"unitCode": "wmoUnit:degC", "value": 22.0},
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 12.0},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 55.0},
+                    "windDirection": {"unitCode": "wmoUnit:degree_(angle)", "value": 180},
+                    "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 8.0},
+                    "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 101000},
+                    "precipitationLastHour": {"unitCode": "wmoUnit:mm", "value": 0.0},
+                    "cloudLayers": [{"amount": "CLR"}],
+                    "textDescription": "Clear",
+                    "rawMessage": "KNYC 021000Z AUTO 18004KT 10SM CLR 22/12 A2983 RMK AO2 T02200120",
+                }
+            }
+        ]
+    }

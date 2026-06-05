@@ -14,6 +14,7 @@ from src.trading.config import TradingConfig
 
 LIVE_FORECAST_SOURCE = "open_meteo_live_forecast"
 LIVE_OBSERVATION_SOURCE = "open_meteo_live_current"
+LIVE_OBSERVATION_FALLBACK_SOURCE = "open_meteo_observation_fallback"
 
 OBSERVED_HOURLY_VARIABLES = [
     "temperature_2m",
@@ -274,6 +275,7 @@ def fetch_live_weather(
         )
     )
 
+    observation_fallback_reason = ""
     if settings.observations_provider == "nws_station":
         hourly_observations = _hourly_frame_from_nws_payload(
             observation_payload,
@@ -282,6 +284,46 @@ def fetch_live_weather(
             station_id=settings.nws_station.station_id,
             station_name=settings.nws_station.station_name,
         )
+        observation_fallback_reason = _nws_observation_fallback_reason(
+            hourly_observations,
+            prediction_time=prediction_local,
+            max_age_minutes=settings.max_observation_age_minutes,
+        )
+        if observation_fallback_reason:
+            fallback_payload = provider_client.fetch(
+                _weather_params(
+                    latitude=settings.observation_grid.latitude,
+                    longitude=settings.observation_grid.longitude,
+                    timezone=settings.timezone,
+                    temperature_unit=settings.temperature_unit,
+                    wind_speed_unit=settings.wind_speed_unit,
+                    precipitation_unit=settings.precipitation_unit,
+                    hourly=OBSERVED_HOURLY_VARIABLES,
+                    current=OBSERVED_HOURLY_VARIABLES,
+                    daily=[],
+                    past_hours=settings.observed_past_hours,
+                    forecast_hours=1,
+                    forecast_days=1,
+                )
+            )
+            fallback_observations = _hourly_frame_from_payload(
+                fallback_payload,
+                location=location,
+                source_role="hourly_observations",
+                source_name=LIVE_OBSERVATION_FALLBACK_SOURCE,
+                include_current=True,
+            )
+            if not fallback_observations.empty:
+                fallback_observations["provider_station_id"] = settings.nws_station.station_id
+                fallback_observations["provider_station_name"] = (
+                    f"Open-Meteo proxy fallback for {settings.nws_station.station_name}"
+                )
+                fallback_observations["provider_units"] = (
+                    "temperature=F;wind_speed=mph;precipitation=inch"
+                )
+                fallback_observations["nws_fallback_reason"] = observation_fallback_reason
+                hourly_observations = fallback_observations
+                observation_payload = fallback_payload
     else:
         hourly_observations = _hourly_frame_from_payload(
             observation_payload,
@@ -313,6 +355,7 @@ def fetch_live_weather(
         prediction_time=prediction_local,
         fetched_at=fetched_at_local,
         config=config,
+        observation_fallback_reason=observation_fallback_reason,
     )
 
     return LiveWeatherSnapshot(
@@ -523,6 +566,25 @@ def _hourly_frame_from_nws_payload(
     return _attach_observed_high_so_far(frame)
 
 
+def _nws_observation_fallback_reason(
+    frame: pd.DataFrame,
+    *,
+    prediction_time: datetime,
+    max_age_minutes: int,
+) -> str:
+    if frame.empty or "timestamp" not in frame.columns:
+        return "missing_nws_station_observations"
+    timestamps = pd.to_datetime(frame["timestamp"], errors="coerce")
+    usable = timestamps[timestamps <= pd.Timestamp(prediction_time)]
+    if usable.empty:
+        return "no_nws_station_observation_at_or_before_prediction_time"
+    latest = usable.max().to_pydatetime()
+    age_minutes = (prediction_time - latest).total_seconds() / 60.0
+    if age_minutes > max_age_minutes:
+        return "stale_nws_station_observations"
+    return ""
+
+
 def _time_series_records(
     payload_section: Any,
     *,
@@ -715,6 +777,7 @@ def _build_weather_diagnostics(
     prediction_time: datetime,
     fetched_at: datetime,
     config: TradingConfig,
+    observation_fallback_reason: str = "",
 ) -> pd.DataFrame:
     records: list[dict[str, Any]] = []
     records.extend(_unit_diagnostics(observation_payload, "hourly_observations", config))
@@ -740,6 +803,20 @@ def _build_weather_diagnostics(
             max_age_minutes=config.weather.max_forecast_age_minutes,
         )
     )
+    if observation_fallback_reason:
+        records.append(
+            _diagnostic_record(
+                "nws_station_observation_fallback",
+                "hourly_observations",
+                "NO_TRADE",
+                "nws_station_observation_fallback",
+                fetched_at=fetched_at,
+                detail=(
+                    f"{observation_fallback_reason}; using Open-Meteo proxy "
+                    "observations so the model can still score for display."
+                ),
+            )
+        )
     verified_high_record = _verified_observed_high_record(
         hourly_observations=hourly_observations,
         target_date=target_date,
@@ -1001,6 +1078,7 @@ def _coerce_numeric_weather_columns(frame: pd.DataFrame) -> pd.DataFrame:
             "provider_station_id",
             "provider_station_name",
             "provider_units",
+            "nws_fallback_reason",
             "nws_station_id",
             "nws_station_name",
             "nws_observation_raw",
