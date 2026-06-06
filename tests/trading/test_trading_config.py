@@ -85,3 +85,17 @@ def test_open_meteo_provider_alias_is_normalized() -> None:
 
     assert config.weather.provider == "open_meteo"
     assert config.weather.observations_provider == "open_meteo"
+
+
+def test_unknown_live_weather_provider_falls_back_to_nws() -> None:
+    config = parse_trading_config(
+        {
+            "weather": {
+                "provider": "nws-current-live-forecast-v2",
+                "observations_provider": "station-observations",
+            }
+        }
+    )
+
+    assert config.weather.provider == "nws"
+    assert config.weather.observations_provider == "nws_station"

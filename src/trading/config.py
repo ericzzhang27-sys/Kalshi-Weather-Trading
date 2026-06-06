@@ -635,6 +635,8 @@ def _normalize_weather_provider(value: str) -> str:
     normalized = (
         value.strip().lower().replace("-", "_").replace(".", "_").replace(" ", "_")
     )
+    if not normalized:
+        return "nws"
     aliases = {
         "nws": "nws",
         "noaa": "nws",
@@ -647,13 +649,21 @@ def _normalize_weather_provider(value: str) -> str:
         "open_meteo": "open_meteo",
         "openmeteo": "open_meteo",
     }
-    return aliases.get(normalized, normalized)
+    if normalized in aliases:
+        return aliases[normalized]
+    if "meteo" in normalized:
+        return "open_meteo"
+    if any(token in normalized for token in ["nws", "noaa", "weather"]):
+        return "nws"
+    return "nws"
 
 
 def _normalize_observations_provider(value: str) -> str:
     normalized = (
         value.strip().lower().replace("-", "_").replace(".", "_").replace(" ", "_")
     )
+    if not normalized:
+        return "nws_station"
     aliases = {
         "nws": "nws_station",
         "noaa": "nws_station",
@@ -664,7 +674,13 @@ def _normalize_observations_provider(value: str) -> str:
         "open_meteo": "open_meteo",
         "openmeteo": "open_meteo",
     }
-    return aliases.get(normalized, normalized)
+    if normalized in aliases:
+        return aliases[normalized]
+    if "meteo" in normalized:
+        return "open_meteo"
+    if any(token in normalized for token in ["nws", "noaa", "weather"]):
+        return "nws_station"
+    return "nws_station"
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
