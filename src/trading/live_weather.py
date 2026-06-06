@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
+import re
 from typing import Any, Mapping, Protocol
 from zoneinfo import ZoneInfo
 
@@ -13,6 +14,7 @@ from src.trading.config import TradingConfig
 
 
 LIVE_FORECAST_SOURCE = "open_meteo_live_forecast"
+NWS_FORECAST_SOURCE = "nws_gridpoint_forecast"
 LIVE_OBSERVATION_SOURCE = "open_meteo_live_current"
 LIVE_OBSERVATION_FALLBACK_SOURCE = "open_meteo_observation_fallback"
 
@@ -99,6 +101,14 @@ ISSUE_TIME_KEYS = [
 
 class WeatherProviderClient(Protocol):
     def fetch(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        ...
+
+
+class NwsForecastProviderClient(Protocol):
+    def fetch_point_metadata(self, latitude: float, longitude: float) -> dict[str, Any]:
+        ...
+
+    def fetch_forecast_url(self, url: str) -> dict[str, Any]:
         ...
 
 
@@ -200,6 +210,50 @@ class NwsStationClient:
         return payload
 
 
+class NwsForecastClient:
+    def __init__(
+        self,
+        base_url: str = "https://api.weather.gov",
+        user_agent: str = "KalshiWeatherTrading/0.1 (local research; contact user)",
+        timeout_seconds: float = 15.0,
+        session: requests.Session | None = None,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.user_agent = user_agent
+        self.timeout_seconds = float(timeout_seconds)
+        self.session = session or requests.Session()
+
+    def fetch_point_metadata(self, latitude: float, longitude: float) -> dict[str, Any]:
+        response = self.session.get(
+            f"{self.base_url}/points/{float(latitude):.5f},{float(longitude):.5f}",
+            headers={
+                "Accept": "application/geo+json",
+                "User-Agent": self.user_agent,
+            },
+            timeout=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("NWS points response must be a JSON object")
+        return payload
+
+    def fetch_forecast_url(self, url: str) -> dict[str, Any]:
+        response = self.session.get(
+            url,
+            headers={
+                "Accept": "application/geo+json",
+                "User-Agent": self.user_agent,
+            },
+            timeout=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("NWS forecast response must be a JSON object")
+        return payload
+
+
 def fetch_live_weather(
     location: str,
     target_date: date,
@@ -210,9 +264,37 @@ def fetch_live_weather(
     fetched_at: datetime | None = None,
 ) -> LiveWeatherSnapshot:
     settings = config.weather
-    provider_client = client or OpenMeteoClient(
-        base_url=settings.forecast_base_url,
-        timeout_seconds=config.kalshi.request_timeout_seconds,
+    open_meteo_client = (
+        client
+        if settings.provider == "open_meteo" and client is not None
+        else OpenMeteoClient(
+            base_url=settings.forecast_base_url,
+            timeout_seconds=config.kalshi.request_timeout_seconds,
+        )
+    )
+    nws_forecast_client = (
+        client
+        if settings.provider == "nws" and client is not None
+        else NwsForecastClient(
+            base_url=settings.nws_station.base_url,
+            user_agent=settings.nws_station.user_agent,
+            timeout_seconds=config.kalshi.request_timeout_seconds,
+        )
+    )
+    provider_client = open_meteo_client
+    if settings.provider == "open_meteo":
+        provider_client = open_meteo_client
+    elif settings.provider == "nws":
+        provider_client = nws_forecast_client
+    else:
+        raise ValueError(f"Unsupported live weather provider: {settings.provider}")
+    open_meteo_fallback_client = (
+        open_meteo_client
+        if settings.provider == "open_meteo"
+        else OpenMeteoClient(
+            base_url=settings.forecast_base_url,
+            timeout_seconds=config.kalshi.request_timeout_seconds,
+        )
     )
     prediction_local = _local_naive_datetime(prediction_time, settings.timezone)
     fetched_at_local = _local_naive_datetime(fetched_at or datetime.now(ZoneInfo(settings.timezone)), settings.timezone)
@@ -242,7 +324,7 @@ def fetch_live_weather(
             "precipitation": "inch",
         }
     else:
-        observation_payload = provider_client.fetch(
+        observation_payload = open_meteo_client.fetch(
             _weather_params(
                 latitude=settings.observation_grid.latitude,
                 longitude=settings.observation_grid.longitude,
@@ -258,22 +340,30 @@ def fetch_live_weather(
                 forecast_days=1,
             )
         )
-    forecast_payload = provider_client.fetch(
-        _weather_params(
+    if settings.provider == "nws":
+        forecast_payload = _fetch_nws_forecast_payload(
+            provider_client,
             latitude=settings.forecast_grid.latitude,
             longitude=settings.forecast_grid.longitude,
-            timezone=settings.timezone,
-            temperature_unit=settings.temperature_unit,
-            wind_speed_unit=settings.wind_speed_unit,
-            precipitation_unit=settings.precipitation_unit,
-            hourly=FORECAST_HOURLY_VARIABLES,
-            current=[],
-            daily=DAILY_FORECAST_VARIABLES,
-            past_hours=settings.forecast_past_hours,
-            forecast_hours=24,
-            forecast_days=settings.forecast_days,
+            timezone_name=settings.timezone,
         )
-    )
+    else:
+        forecast_payload = open_meteo_client.fetch(
+            _weather_params(
+                latitude=settings.forecast_grid.latitude,
+                longitude=settings.forecast_grid.longitude,
+                timezone=settings.timezone,
+                temperature_unit=settings.temperature_unit,
+                wind_speed_unit=settings.wind_speed_unit,
+                precipitation_unit=settings.precipitation_unit,
+                hourly=FORECAST_HOURLY_VARIABLES,
+                current=[],
+                daily=DAILY_FORECAST_VARIABLES,
+                past_hours=settings.forecast_past_hours,
+                forecast_hours=24,
+                forecast_days=settings.forecast_days,
+            )
+        )
 
     observation_fallback_reason = ""
     if settings.observations_provider == "nws_station":
@@ -290,7 +380,7 @@ def fetch_live_weather(
             max_age_minutes=settings.max_observation_age_minutes,
         )
         if observation_fallback_reason:
-            fallback_payload = provider_client.fetch(
+            fallback_payload = open_meteo_fallback_client.fetch(
                 _weather_params(
                     latitude=settings.observation_grid.latitude,
                     longitude=settings.observation_grid.longitude,
@@ -332,18 +422,31 @@ def fetch_live_weather(
             source_name=LIVE_OBSERVATION_SOURCE,
             include_current=True,
         )
-    hourly_forecasts = _hourly_frame_from_payload(
-        forecast_payload,
-        location=location,
-        source_role="hourly_forecasts",
-        source_name=LIVE_FORECAST_SOURCE,
-        include_current=False,
-    )
-    daily_forecast = _daily_forecast_frame_from_payload(
-        forecast_payload,
-        location=location,
-        source_name=LIVE_FORECAST_SOURCE,
-    )
+    if settings.provider == "nws":
+        hourly_forecasts = _hourly_frame_from_nws_forecast_payload(
+            forecast_payload,
+            location=location,
+            timezone_name=settings.timezone,
+        )
+        daily_forecast = _daily_forecast_frame_from_nws_payload(
+            forecast_payload,
+            hourly_forecasts=hourly_forecasts,
+            location=location,
+            timezone_name=settings.timezone,
+        )
+    else:
+        hourly_forecasts = _hourly_frame_from_payload(
+            forecast_payload,
+            location=location,
+            source_role="hourly_forecasts",
+            source_name=LIVE_FORECAST_SOURCE,
+            include_current=False,
+        )
+        daily_forecast = _daily_forecast_frame_from_payload(
+            forecast_payload,
+            location=location,
+            source_name=LIVE_FORECAST_SOURCE,
+        )
 
     diagnostics = _build_weather_diagnostics(
         observation_payload=observation_payload,
@@ -495,6 +598,253 @@ def _daily_forecast_frame_from_payload(
     frame = _coerce_numeric_weather_columns(frame)
     frame = frame.drop_duplicates(subset=["date", "location"], keep="last")
     return frame.sort_values(["location", "date"]).reset_index(drop=True)
+
+
+def _fetch_nws_forecast_payload(
+    client: NwsForecastProviderClient,
+    *,
+    latitude: float,
+    longitude: float,
+    timezone_name: str,
+) -> dict[str, Any]:
+    point_payload = client.fetch_point_metadata(latitude, longitude)
+    properties = point_payload.get("properties", {})
+    if not isinstance(properties, Mapping):
+        raise ValueError("NWS points response is missing properties")
+    hourly_url = properties.get("forecastHourly")
+    daily_url = properties.get("forecast")
+    if not hourly_url:
+        raise ValueError("NWS points response is missing forecastHourly URL")
+    hourly_payload = client.fetch_forecast_url(str(hourly_url))
+    daily_payload = client.fetch_forecast_url(str(daily_url)) if daily_url else {}
+    issue_time = _nws_forecast_issue_time(hourly_payload, timezone_name) or _nws_forecast_issue_time(
+        daily_payload,
+        timezone_name,
+    )
+    return {
+        "provider": NWS_FORECAST_SOURCE,
+        "point": point_payload,
+        "nws_hourly": hourly_payload,
+        "nws_daily": daily_payload,
+        "forecast_issue_time": "" if issue_time is None else issue_time.isoformat(),
+        "hourly_units": {
+            "time": "iso8601",
+            "temperature_2m": "F",
+            "wind_speed_10m": "mph",
+            "precipitation": "inch",
+        },
+        "daily_units": {
+            "time": "iso8601",
+            "temperature_2m": "F",
+            "wind_speed_10m": "mph",
+            "precipitation": "inch",
+        },
+    }
+
+
+def _hourly_frame_from_nws_forecast_payload(
+    payload: Mapping[str, Any],
+    *,
+    location: str,
+    timezone_name: str,
+) -> pd.DataFrame:
+    hourly_payload = payload.get("nws_hourly", payload)
+    periods = _nws_periods(hourly_payload)
+    if not periods:
+        return _empty_weather_frame(source_role="hourly_forecasts")
+    issue_time = _payload_issue_time(payload) or _nws_forecast_issue_time(
+        hourly_payload,
+        timezone_name,
+    )
+
+    rows: list[dict[str, Any]] = []
+    for period in periods:
+        if not isinstance(period, Mapping):
+            continue
+        timestamp = _nws_local_time(period.get("startTime"), timezone_name)
+        if timestamp is None:
+            continue
+        short_forecast = str(period.get("shortForecast", "") or "")
+        detailed_forecast = str(period.get("detailedForecast", "") or "")
+        row = {
+            "timestamp": timestamp,
+            "temperature_2m": _nws_temperature_value(
+                period.get("temperature"),
+                period.get("temperatureUnit"),
+            ),
+            "relative_humidity_2m": _quantitative_value(period.get("relativeHumidity")),
+            "dew_point_2m": _unit_quantity(
+                period.get("dewpoint"),
+                target_unit="fahrenheit",
+            ),
+            "precipitation": 0.0,
+            "rain": 0.0,
+            "precipitation_probability": _quantitative_value(
+                period.get("probabilityOfPrecipitation")
+            ),
+            "weather_code": _weather_code_from_text(
+                f"{short_forecast} {detailed_forecast}"
+            ),
+            "cloud_cover": _cloud_cover_from_forecast_text(short_forecast),
+            "surface_pressure": None,
+            "wind_speed_10m": _wind_speed_from_text(period.get("windSpeed")),
+            "wind_direction_10m": _wind_direction_degrees(period.get("windDirection")),
+            "wind_gusts_10m": _wind_gust_from_text(detailed_forecast),
+            "is_day": 1.0 if bool(period.get("isDaytime")) else 0.0,
+            "nws_forecast_name": period.get("name", ""),
+            "nws_short_forecast": short_forecast,
+            "nws_detailed_forecast": detailed_forecast,
+        }
+        rows.append(row)
+
+    frame = pd.DataFrame.from_records(rows)
+    if frame.empty:
+        return _empty_weather_frame(source_role="hourly_forecasts")
+    frame["timestamp"] = pd.to_datetime(frame["timestamp"], errors="raise")
+    frame["date"] = frame["timestamp"].dt.normalize()
+    frame["target_date"] = frame["date"]
+    frame["location"] = location
+    frame["source_role"] = "hourly_forecasts"
+    frame["forecast_source"] = NWS_FORECAST_SOURCE
+    if issue_time is not None:
+        frame["forecast_issue_time"] = issue_time
+    frame["provider_units"] = (
+        "temperature=F;wind_speed=mph;precipitation_probability=percent"
+    )
+    frame = _coerce_numeric_weather_columns(frame)
+    frame = frame.drop_duplicates(subset=["timestamp", "location"], keep="last")
+    return frame.sort_values(["location", "timestamp"]).reset_index(drop=True)
+
+
+def _daily_forecast_frame_from_nws_payload(
+    payload: Mapping[str, Any],
+    *,
+    hourly_forecasts: pd.DataFrame,
+    location: str,
+    timezone_name: str,
+) -> pd.DataFrame:
+    daily_periods = _daily_period_frame_from_nws_payload(
+        payload,
+        location=location,
+        timezone_name=timezone_name,
+    )
+    hourly_daily = _daily_frame_from_hourly_nws_forecasts(hourly_forecasts, location=location)
+    if hourly_daily.empty:
+        result = daily_periods
+    elif daily_periods.empty:
+        result = hourly_daily
+    else:
+        result = hourly_daily.merge(
+            daily_periods,
+            on=["date", "location", "source_role", "forecast_source"],
+            how="outer",
+            suffixes=("", "_period"),
+        )
+        for column in ["forecast_high", "temperature_2m_min", "weather_code"]:
+            period_column = f"{column}_period"
+            if period_column in result.columns:
+                if column in result.columns:
+                    result[column] = result[column].combine_first(result[period_column])
+                else:
+                    result[column] = result[period_column]
+                result = result.drop(columns=[period_column])
+        if "forecast_issue_time_period" in result.columns:
+            result["forecast_issue_time"] = result["forecast_issue_time"].combine_first(
+                result["forecast_issue_time_period"]
+            )
+            result = result.drop(columns=["forecast_issue_time_period"])
+    if result.empty:
+        return _empty_weather_frame(source_role="daily_forecast")
+    return result.sort_values(["location", "date"]).reset_index(drop=True)
+
+
+def _daily_frame_from_hourly_nws_forecasts(
+    hourly_forecasts: pd.DataFrame,
+    *,
+    location: str,
+) -> pd.DataFrame:
+    if hourly_forecasts.empty or not {"date", "temperature_2m"}.issubset(hourly_forecasts.columns):
+        return pd.DataFrame()
+    frame = hourly_forecasts.copy()
+    frame["temperature_2m"] = pd.to_numeric(frame["temperature_2m"], errors="coerce")
+    if "precipitation_probability" in frame.columns:
+        frame["precipitation_probability"] = pd.to_numeric(
+            frame["precipitation_probability"],
+            errors="coerce",
+        )
+    if "wind_speed_10m" in frame.columns:
+        frame["wind_speed_10m"] = pd.to_numeric(frame["wind_speed_10m"], errors="coerce")
+    records = []
+    for day, group in frame.dropna(subset=["date"]).groupby("date", sort=False):
+        records.append(
+            {
+                "date": pd.Timestamp(day).normalize(),
+                "location": location,
+                "source_role": "daily_forecast",
+                "forecast_source": NWS_FORECAST_SOURCE,
+                "forecast_issue_time": _first_valid(group, "forecast_issue_time"),
+                "forecast_high": _max_numeric(group, "temperature_2m"),
+                "temperature_2m_min": _min_numeric(group, "temperature_2m"),
+                "precipitation_probability_max": _max_numeric(
+                    group,
+                    "precipitation_probability",
+                ),
+                "wind_speed_10m_max": _max_numeric(group, "wind_speed_10m"),
+                "weather_code": _first_valid(group, "weather_code"),
+            }
+        )
+    return pd.DataFrame.from_records(records)
+
+
+def _daily_period_frame_from_nws_payload(
+    payload: Mapping[str, Any],
+    *,
+    location: str,
+    timezone_name: str,
+) -> pd.DataFrame:
+    daily_payload = payload.get("nws_daily", {})
+    periods = _nws_periods(daily_payload)
+    if not periods:
+        return pd.DataFrame()
+    issue_time = _payload_issue_time(payload) or _nws_forecast_issue_time(
+        daily_payload,
+        timezone_name,
+    )
+    records_by_date: dict[pd.Timestamp, dict[str, Any]] = {}
+    for period in periods:
+        if not isinstance(period, Mapping):
+            continue
+        start = _nws_local_time(period.get("startTime"), timezone_name)
+        if start is None:
+            continue
+        day = pd.Timestamp(start).normalize()
+        record = records_by_date.setdefault(
+            day,
+            {
+                "date": day,
+                "location": location,
+                "source_role": "daily_forecast",
+                "forecast_source": NWS_FORECAST_SOURCE,
+                "forecast_issue_time": issue_time,
+            },
+        )
+        temp = _nws_temperature_value(period.get("temperature"), period.get("temperatureUnit"))
+        if bool(period.get("isDaytime")):
+            record["forecast_high"] = _max_optional(record.get("forecast_high"), temp)
+        else:
+            record["temperature_2m_min"] = _min_optional(record.get("temperature_2m_min"), temp)
+        record["precipitation_probability_max"] = _max_optional(
+            record.get("precipitation_probability_max"),
+            _quantitative_value(period.get("probabilityOfPrecipitation")),
+        )
+        record["wind_speed_10m_max"] = _max_optional(
+            record.get("wind_speed_10m_max"),
+            _wind_speed_from_text(period.get("windSpeed")),
+        )
+        record["weather_code"] = _weather_code_from_text(
+            f"{period.get('shortForecast', '')} {period.get('detailedForecast', '')}"
+        )
+    return pd.DataFrame.from_records(list(records_by_date.values()))
 
 
 def _hourly_frame_from_nws_payload(
@@ -719,6 +1069,217 @@ def _nws_remark_max_temperatures(raw_message: Any) -> tuple[float | None, float 
             if token[2:5].isdigit() and token[6:9].isdigit():
                 daily_max = _signed_tenths_celsius_to_fahrenheit(token[1], token[2:5])
     return six_hour_max, daily_max
+
+
+def _nws_periods(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, Mapping):
+        return []
+    properties = payload.get("properties", {})
+    if not isinstance(properties, Mapping):
+        return []
+    periods = properties.get("periods", [])
+    return periods if isinstance(periods, list) else []
+
+
+def _nws_forecast_issue_time(
+    payload: Mapping[str, Any],
+    timezone_name: str,
+) -> pd.Timestamp | None:
+    properties = payload.get("properties", {})
+    if not isinstance(properties, Mapping):
+        return None
+    value = properties.get("updateTime") or properties.get("generatedAt")
+    if not value:
+        return None
+    timestamp = pd.to_datetime(value, errors="coerce")
+    if pd.isna(timestamp):
+        return None
+    timezone = ZoneInfo(timezone_name)
+    if timestamp.tzinfo is None:
+        return pd.Timestamp(timestamp)
+    return pd.Timestamp(timestamp.tz_convert(timezone).tz_localize(None))
+
+
+def _nws_local_time(value: Any, timezone_name: str) -> pd.Timestamp | None:
+    if value is None or value == "":
+        return None
+    timestamp = pd.to_datetime(value, errors="coerce")
+    if pd.isna(timestamp):
+        return None
+    timezone = ZoneInfo(timezone_name)
+    if timestamp.tzinfo is None:
+        return pd.Timestamp(timestamp)
+    return pd.Timestamp(timestamp.tz_convert(timezone).tz_localize(None))
+
+
+def _nws_temperature_value(value: Any, unit: Any) -> float | None:
+    numeric = _optional_float(value)
+    if numeric is None:
+        return None
+    unit_text = str(unit or "").upper()
+    if unit_text == "C":
+        return numeric * 9.0 / 5.0 + 32.0
+    return numeric
+
+
+def _quantitative_value(value: Any) -> float | None:
+    if not isinstance(value, Mapping):
+        return None
+    return _optional_float(value.get("value"))
+
+
+def _unit_quantity(value: Any, *, target_unit: str) -> float | None:
+    if not isinstance(value, Mapping):
+        return None
+    numeric = _optional_float(value.get("value"))
+    if numeric is None:
+        return None
+    unit_code = str(value.get("unitCode", ""))
+    if target_unit == "fahrenheit" and "degC" in unit_code:
+        return numeric * 9.0 / 5.0 + 32.0
+    if target_unit == "mph":
+        if "km_h-1" in unit_code:
+            return numeric * 0.621371
+        if "m_s-1" in unit_code:
+            return numeric * 2.236936
+    return numeric
+
+
+def _wind_speed_from_text(value: Any) -> float | None:
+    text = str(value or "")
+    numbers = [float(match) for match in re.findall(r"\d+(?:\.\d+)?", text)]
+    if not numbers:
+        return None
+    speed = max(numbers)
+    lower = text.lower()
+    if "km/h" in lower or "km h" in lower:
+        speed *= 0.621371
+    elif "m/s" in lower:
+        speed *= 2.236936
+    return speed
+
+
+def _wind_gust_from_text(value: Any) -> float | None:
+    text = str(value or "")
+    match = re.search(r"gusts? (?:as high as |up to )?(\d+(?:\.\d+)?)", text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    return float(match.group(1))
+
+
+def _wind_direction_degrees(value: Any) -> float | None:
+    text = str(value or "").strip().upper()
+    if not text:
+        return None
+    if text.endswith("DEG"):
+        text = text[:-3].strip()
+    numeric = _optional_float(text)
+    if numeric is not None:
+        return numeric
+    lookup = {
+        "N": 0.0,
+        "NNE": 22.5,
+        "NE": 45.0,
+        "ENE": 67.5,
+        "E": 90.0,
+        "ESE": 112.5,
+        "SE": 135.0,
+        "SSE": 157.5,
+        "S": 180.0,
+        "SSW": 202.5,
+        "SW": 225.0,
+        "WSW": 247.5,
+        "W": 270.0,
+        "WNW": 292.5,
+        "NW": 315.0,
+        "NNW": 337.5,
+        "VRB": None,
+        "VARIABLE": None,
+    }
+    return lookup.get(text)
+
+
+def _weather_code_from_text(value: Any) -> float | None:
+    text = str(value or "").lower()
+    if not text:
+        return None
+    if "thunder" in text:
+        return 95.0
+    if "snow" in text:
+        return 71.0
+    if "sleet" in text or "freezing rain" in text:
+        return 66.0
+    if "rain" in text or "shower" in text or "drizzle" in text:
+        return 61.0
+    if "fog" in text or "mist" in text or "haze" in text:
+        return 45.0
+    if "overcast" in text:
+        return 3.0
+    if "cloud" in text:
+        return 2.0
+    if "sun" in text or "clear" in text or "fair" in text:
+        return 0.0
+    return None
+
+
+def _cloud_cover_from_forecast_text(value: Any) -> float | None:
+    text = str(value or "").lower()
+    if not text:
+        return None
+    if "clear" in text or "sunny" in text:
+        return 0.0
+    if "mostly sunny" in text or "mostly clear" in text:
+        return 25.0
+    if "partly" in text:
+        return 50.0
+    if "mostly cloudy" in text:
+        return 75.0
+    if "cloudy" in text or "overcast" in text:
+        return 100.0
+    return None
+
+
+def _first_valid(frame: pd.DataFrame, column: str) -> Any:
+    if frame.empty or column not in frame.columns:
+        return None
+    values = frame[column].dropna()
+    return None if values.empty else values.iloc[0]
+
+
+def _max_numeric(frame: pd.DataFrame, column: str) -> float | None:
+    if frame.empty or column not in frame.columns:
+        return None
+    values = pd.to_numeric(frame[column], errors="coerce").dropna()
+    return None if values.empty else float(values.max())
+
+
+def _min_numeric(frame: pd.DataFrame, column: str) -> float | None:
+    if frame.empty or column not in frame.columns:
+        return None
+    values = pd.to_numeric(frame[column], errors="coerce").dropna()
+    return None if values.empty else float(values.min())
+
+
+def _max_optional(left: Any, right: Any) -> float | None:
+    values = [value for value in [_optional_float(left), _optional_float(right)] if value is not None]
+    return None if not values else max(values)
+
+
+def _min_optional(left: Any, right: Any) -> float | None:
+    values = [value for value in [_optional_float(left), _optional_float(right)] if value is not None]
+    return None if not values else min(values)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(numeric):
+        return None
+    return numeric
 
 
 def _signed_tenths_celsius_to_fahrenheit(sign: str, tenths: str) -> float:
@@ -1083,6 +1644,9 @@ def _coerce_numeric_weather_columns(frame: pd.DataFrame) -> pd.DataFrame:
             "nws_station_name",
             "nws_observation_raw",
             "nws_text_description",
+            "nws_forecast_name",
+            "nws_short_forecast",
+            "nws_detailed_forecast",
             "sunrise",
             "sunset",
         }:

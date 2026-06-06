@@ -35,6 +35,25 @@ class FakeNwsObservationClient:
         return self.payload
 
 
+class FakeNwsForecastClient:
+    def __init__(self, point_payload=None, hourly_payload=None, daily_payload=None):
+        self.point_payload = point_payload or _nws_point_payload()
+        self.hourly_payload = hourly_payload or _nws_hourly_forecast_payload()
+        self.daily_payload = daily_payload or _nws_daily_forecast_payload()
+        self.point_calls = []
+        self.forecast_calls = []
+
+    def fetch_point_metadata(self, latitude, longitude):
+        self.point_calls.append({"latitude": latitude, "longitude": longitude})
+        return self.point_payload
+
+    def fetch_forecast_url(self, url):
+        self.forecast_calls.append(url)
+        if str(url).endswith("/hourly"):
+            return self.hourly_payload
+        return self.daily_payload
+
+
 def _open_meteo_observation_config(**weather_overrides):
     weather = {"observations_provider": "open_meteo"}
     weather.update(weather_overrides)
@@ -147,6 +166,130 @@ def _forecast_payload(include_high=True, unit="°F", issue_time=None):
     return payload
 
 
+def _nws_point_payload():
+    return {
+        "properties": {
+            "forecastHourly": "https://api.weather.gov/gridpoints/OKX/34,46/forecast/hourly",
+            "forecast": "https://api.weather.gov/gridpoints/OKX/34,46/forecast",
+        }
+    }
+
+
+def _nws_hourly_forecast_payload():
+    return {
+        "properties": {
+            "units": "us",
+            "updateTime": "2026-06-02T10:45:00+00:00",
+            "generatedAt": "2026-06-02T11:00:00+00:00",
+            "periods": [
+                {
+                    "number": 1,
+                    "name": "",
+                    "startTime": "2026-06-02T09:00:00-04:00",
+                    "endTime": "2026-06-02T10:00:00-04:00",
+                    "isDaytime": True,
+                    "temperature": 76,
+                    "temperatureUnit": "F",
+                    "probabilityOfPrecipitation": {
+                        "unitCode": "wmoUnit:percent",
+                        "value": 10,
+                    },
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 13},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 48},
+                    "windSpeed": "5 mph",
+                    "windDirection": "SW",
+                    "shortForecast": "Mostly Sunny",
+                    "detailedForecast": "",
+                },
+                {
+                    "number": 2,
+                    "name": "",
+                    "startTime": "2026-06-02T10:00:00-04:00",
+                    "endTime": "2026-06-02T11:00:00-04:00",
+                    "isDaytime": True,
+                    "temperature": 78,
+                    "temperatureUnit": "F",
+                    "probabilityOfPrecipitation": {
+                        "unitCode": "wmoUnit:percent",
+                        "value": 12,
+                    },
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 14},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 45},
+                    "windSpeed": "6 to 10 mph",
+                    "windDirection": "SW",
+                    "shortForecast": "Mostly Sunny",
+                    "detailedForecast": "Southwest wind 6 to 10 mph.",
+                },
+                {
+                    "number": 3,
+                    "name": "",
+                    "startTime": "2026-06-02T11:00:00-04:00",
+                    "endTime": "2026-06-02T12:00:00-04:00",
+                    "isDaytime": True,
+                    "temperature": 79,
+                    "temperatureUnit": "F",
+                    "probabilityOfPrecipitation": {
+                        "unitCode": "wmoUnit:percent",
+                        "value": 15,
+                    },
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 15},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 43},
+                    "windSpeed": "8 mph",
+                    "windDirection": "SW",
+                    "shortForecast": "Partly Sunny",
+                    "detailedForecast": "Southwest wind 8 mph, with gusts as high as 18 mph.",
+                },
+            ],
+        }
+    }
+
+
+def _nws_daily_forecast_payload():
+    return {
+        "properties": {
+            "units": "us",
+            "updateTime": "2026-06-02T10:45:00+00:00",
+            "generatedAt": "2026-06-02T11:00:00+00:00",
+            "periods": [
+                {
+                    "number": 1,
+                    "name": "Today",
+                    "startTime": "2026-06-02T06:00:00-04:00",
+                    "endTime": "2026-06-02T18:00:00-04:00",
+                    "isDaytime": True,
+                    "temperature": 80,
+                    "temperatureUnit": "F",
+                    "probabilityOfPrecipitation": {
+                        "unitCode": "wmoUnit:percent",
+                        "value": 15,
+                    },
+                    "windSpeed": "6 to 12 mph",
+                    "windDirection": "SW",
+                    "shortForecast": "Partly Sunny",
+                    "detailedForecast": "Partly sunny, with a high near 80.",
+                },
+                {
+                    "number": 2,
+                    "name": "Tonight",
+                    "startTime": "2026-06-02T18:00:00-04:00",
+                    "endTime": "2026-06-03T06:00:00-04:00",
+                    "isDaytime": False,
+                    "temperature": 69,
+                    "temperatureUnit": "F",
+                    "probabilityOfPrecipitation": {
+                        "unitCode": "wmoUnit:percent",
+                        "value": 5,
+                    },
+                    "windSpeed": "5 mph",
+                    "windDirection": "SW",
+                    "shortForecast": "Mostly Clear",
+                    "detailedForecast": "Mostly clear, with a low around 69.",
+                },
+            ],
+        }
+    }
+
+
 def test_fetch_live_weather_builds_frames_and_warns_on_missing_issue_time() -> None:
     config = _open_meteo_observation_config()
     client = FakeOpenMeteoClient([_hourly_payload(), _forecast_payload()])
@@ -239,6 +382,41 @@ def test_required_issue_time_turns_missing_issue_warning_into_no_trade() -> None
         snapshot.diagnostics["diagnostic_name"] == "forecast_issue_time_present"
     ].iloc[0]
     assert issue_diag["status"] == "NO_TRADE"
+
+
+def test_nws_forecasts_are_converted_to_feature_compatible_frames() -> None:
+    config = parse_trading_config(
+        {
+            "weather": {
+                "provider": "nws",
+                "observations_provider": "nws_station",
+            }
+        }
+    )
+    forecast_client = FakeNwsForecastClient()
+
+    snapshot = fetch_live_weather(
+        location="NYC",
+        target_date=date(2026, 6, 2),
+        prediction_time=datetime(2026, 6, 2, 12, 0),
+        config=config,
+        client=forecast_client,
+        observation_client=FakeNwsObservationClient(_nws_observation_payload()),
+        fetched_at=datetime(2026, 6, 2, 12, 5),
+    )
+
+    assert forecast_client.point_calls
+    assert len(forecast_client.forecast_calls) == 2
+    assert snapshot.hourly_forecasts["forecast_source"].iloc[0] == "nws_gridpoint_forecast"
+    assert snapshot.hourly_forecasts["forecast_issue_time"].notna().all()
+    assert snapshot.hourly_forecasts["temperature_2m"].max() == 79.0
+    assert snapshot.hourly_forecasts["dew_point_2m"].iloc[0] == 55.4
+    assert snapshot.daily_forecast["forecast_high"].iloc[0] == 79.0
+    assert "forecast_high" in snapshot.daily_forecast.columns
+    issue_diag = snapshot.diagnostics[
+        snapshot.diagnostics["diagnostic_name"] == "forecast_issue_time_present"
+    ].iloc[0]
+    assert issue_diag["status"] == "OK"
 
 
 def test_nws_station_observations_are_converted_to_feature_compatible_units() -> None:

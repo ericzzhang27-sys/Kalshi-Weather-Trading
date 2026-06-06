@@ -44,7 +44,7 @@ markets:
     - weather
 
 weather:
-  provider: open_meteo
+  provider: nws
   observations_provider: nws_station
   forecast_base_url: https://api.open-meteo.com/v1/forecast
   timezone: America/New_York
@@ -60,7 +60,8 @@ weather:
     longitude: -73.96925
     base_url: https://api.weather.gov
     user_agent: KalshiWeatherTrading/0.1 (local research; contact user)
-  # Open-Meteo fallback/raw-data grid and forecast grid.
+  # Open-Meteo remains available for observation fallback; NWS gridpoint is used
+  # for live forecasts.
   observation_grid:
     latitude: 40.808434
     longitude: -74.0199

@@ -15,6 +15,7 @@ def test_default_trading_config_is_shadow_and_not_live_auto() -> None:
     assert config.live_auto_enabled is False
     assert config.kalshi.base_url.endswith("/trade-api/v2")
     assert config.markets.default_location == "NYC"
+    assert config.weather.provider == "nws"
     assert config.settlement.typical_peak_hour == 15
     assert config.outputs.settlement_state_path.name == "settlement_state.csv"
 

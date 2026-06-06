@@ -246,8 +246,8 @@ def validate_trading_config(config: TradingConfig) -> None:
         raise TradingConfigError("markets.page_limit must be between 1 and 1000")
     if config.markets.max_pages < 1:
         raise TradingConfigError("markets.max_pages must be positive")
-    if config.weather.provider != "open_meteo":
-        raise TradingConfigError("weather.provider must be open_meteo")
+    if config.weather.provider not in {"open_meteo", "nws"}:
+        raise TradingConfigError("weather.provider must be open_meteo or nws")
     if config.weather.observations_provider not in {"open_meteo", "nws_station"}:
         raise TradingConfigError(
             "weather.observations_provider must be open_meteo or nws_station"
