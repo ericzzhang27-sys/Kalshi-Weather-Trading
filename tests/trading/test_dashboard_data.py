@@ -149,6 +149,9 @@ def test_load_dashboard_state_orchestrates_read_only_refresh_with_fake_clients()
     assert len(state.bucket_board) == 6
     assert state.bucket_board["probability"].sum() == pytest.approx(1.0, abs=1e-6)
     assert state.bucket_board["best_yes_bid"].notna().all()
+    assert state.status["settlement_status"] == "PRE_PEAK_FORECAST"
+    assert state.status["settlement_trading_allowed"] is True
+    assert not state.settlement_state.empty
     assert not state.live_feature_rows.empty
     assert not state.feature_freshness.empty
 
@@ -175,6 +178,7 @@ def test_load_dashboard_state_keeps_live_orderbooks_when_features_are_not_scorea
     assert any("live_feature_scoring_unavailable" in item for item in state.status["warnings"])
     assert state.bucket_probabilities.empty
     assert state.live_feature_rows.empty
+    assert state.status["settlement_status"] == "STALE_WEATHER_NO_TRADE"
     assert not state.orderbook.empty
     assert len(state.bucket_board) == 6
     assert state.bucket_board["best_yes_bid"].notna().all()
@@ -206,6 +210,7 @@ def test_load_dashboard_state_records_probability_scoring_error_after_features(m
     assert state.status["edge_rows"] == 0
     assert state.status["probability_scoring_status"] == "ERROR"
     assert state.status["probability_scoring_error"] == "RuntimeError: model unavailable"
+    assert not state.settlement_state.empty
     assert any(
         "probability_scoring_unavailable:RuntimeError: model unavailable" == item
         for item in state.status["warnings"]

@@ -41,6 +41,13 @@ from src.trading.probability_signal import (
     save_probability_signal_outputs,
     score_live_probabilities,
 )
+from src.trading.settlement_state import (
+    SettlementState,
+    apply_settlement_state_to_probabilities,
+    evaluate_settlement_state,
+    save_settlement_state,
+    settlement_state_frame,
+)
 
 
 @dataclass(frozen=True)
@@ -53,6 +60,7 @@ class DashboardState:
     feature_freshness: pd.DataFrame
     bucket_probabilities: pd.DataFrame
     distribution_params: pd.DataFrame
+    settlement_state: pd.DataFrame
     orderbook: pd.DataFrame
     orderbook_summary: pd.DataFrame
     edge_table: pd.DataFrame
@@ -114,6 +122,7 @@ def load_dashboard_state(
             feature_freshness=pd.DataFrame(),
             bucket_probabilities=pd.DataFrame(),
             distribution_params=pd.DataFrame(),
+            settlement_state=pd.DataFrame(),
             orderbook=pd.DataFrame(),
             orderbook_summary=pd.DataFrame(),
             edge_table=pd.DataFrame(),
@@ -178,6 +187,23 @@ def load_dashboard_state(
         if probability_result is not None
         else pd.DataFrame()
     )
+    settlement = evaluate_settlement_state(
+        weather=weather,
+        feature_rows=feature_rows,
+        settings=config.settlement,
+        prediction_time=prediction_time or refresh_time,
+        evaluated_at=refresh_time,
+        event_ticker=selected_event,
+        target_date=selected_target_date,
+    )
+    if not bucket_probabilities.empty:
+        bucket_probabilities = apply_settlement_state_to_probabilities(
+            bucket_probabilities,
+            mapping_result.mapping,
+            settlement,
+            config.settlement,
+        )
+    settlement_frame = settlement_state_frame(settlement)
     edge_table = (
         compute_edge_table(
             bucket_probabilities,
@@ -195,6 +221,7 @@ def load_dashboard_state(
         orderbook_snapshot,
         live_feature_error=live_feature_error,
         probability_error=probability_error,
+        settlement=settlement,
     )
     status = _status_dict(
         config=config,
@@ -208,6 +235,7 @@ def load_dashboard_state(
         probability_rows=len(bucket_probabilities),
         feature_rows=len(feature_rows),
         edge_rows=len(edge_table),
+        settlement=settlement,
         live_feature_error=live_feature_error,
         probability_scoring_error=probability_error,
     )
@@ -226,6 +254,7 @@ def load_dashboard_state(
         feature_freshness=feature_freshness,
         bucket_probabilities=bucket_probabilities,
         distribution_params=distribution_params,
+        settlement_state=settlement_frame,
         orderbook=orderbook_snapshot.orderbook,
         orderbook_summary=orderbook_snapshot.summary,
         edge_table=edge_table,
@@ -248,6 +277,7 @@ def load_dashboard_state_from_artifacts(config: TradingConfig) -> DashboardState
     features = _read_csv(config.outputs.live_feature_rows_path)
     freshness = _read_csv(config.outputs.live_feature_freshness_path)
     probabilities = _read_csv(config.outputs.live_bucket_probabilities_path)
+    settlement_frame = _read_csv(config.outputs.settlement_state_path)
     distribution_params = pd.DataFrame()
     model_name = ""
     model_path = ""
@@ -265,6 +295,23 @@ def load_dashboard_state_from_artifacts(config: TradingConfig) -> DashboardState
         model_path = model_path or str(DEFAULT_MODEL_PATH)
     market_discovery = _read_csv(config.outputs.market_discovery_snapshot_path)
     weather = _read_csv(config.outputs.live_weather_snapshot_path)
+    event = _first_nonempty(mapping, "event_ticker") or _first_nonempty(features, "event_ticker")
+    settlement = _settlement_from_artifacts(
+        config=config,
+        settlement_frame=settlement_frame,
+        weather=weather,
+        features=features,
+        event_ticker=event,
+    )
+    if settlement_frame.empty:
+        settlement_frame = settlement_state_frame(settlement)
+    if not probabilities.empty:
+        probabilities = apply_settlement_state_to_probabilities(
+            probabilities,
+            mapping,
+            settlement,
+            config.settlement,
+        )
     orderbook = _read_csv(config.outputs.orderbook_snapshot_path)
     orderbook_summary = _summaries_from_orderbook(orderbook, config)
     if orderbook_summary.empty:
@@ -278,19 +325,19 @@ def load_dashboard_state_from_artifacts(config: TradingConfig) -> DashboardState
     else:
         edge_table = _read_csv(config.outputs.edge_table_path)
     bucket_board = build_bucket_board(mapping, probabilities, orderbook_summary, edge_table)
-    event = _first_nonempty(mapping, "event_ticker") or _first_nonempty(features, "event_ticker")
     status = _status_dict(
         config=config,
         data_source="saved_artifacts",
         refresh_time=datetime.now().astimezone(),
         event_ticker=event,
         target_date=_event_date_from_ticker(event or ""),
-        warnings=_artifact_warnings(features, probabilities, orderbook),
+        warnings=_artifact_warnings(features, probabilities, orderbook, settlement=settlement),
         model_name=model_name,
         model_path=model_path,
         probability_rows=len(probabilities),
         feature_rows=len(features),
         edge_rows=len(edge_table),
+        settlement=settlement,
     )
     return DashboardState(
         status=status,
@@ -301,6 +348,7 @@ def load_dashboard_state_from_artifacts(config: TradingConfig) -> DashboardState
         feature_freshness=freshness,
         bucket_probabilities=probabilities,
         distribution_params=distribution_params,
+        settlement_state=settlement_frame,
         orderbook=orderbook,
         orderbook_summary=orderbook_summary,
         edge_table=edge_table,
@@ -329,6 +377,10 @@ def build_bucket_board(
             "model_name",
             "distribution_type",
             "calibration_method",
+            "settlement_status",
+            "settlement_reason",
+            "settlement_trading_allowed",
+            "probability_mode",
         ]
         if column in probabilities.columns
     ]
@@ -423,10 +475,12 @@ def _write_outputs(
             config.outputs.live_feature_rows_path,
             config.outputs.live_feature_freshness_path,
         )
-    if probability_result is not None:
-        save_probability_signal_outputs(probability_result, config.outputs.live_bucket_probabilities_path)
-    elif not state.bucket_probabilities.empty:
+    if not state.bucket_probabilities.empty:
         state.bucket_probabilities.to_csv(config.outputs.live_bucket_probabilities_path, index=False)
+    elif probability_result is not None:
+        save_probability_signal_outputs(probability_result, config.outputs.live_bucket_probabilities_path)
+    if not state.settlement_state.empty:
+        save_settlement_state(state.settlement_state, config.outputs.settlement_state_path)
     if orderbook_snapshot is not None:
         save_orderbook_snapshot(orderbook_snapshot, config.outputs.orderbook_snapshot_path)
         save_orderbook_summary(orderbook_snapshot, config.outputs.orderbook_summary_path)
@@ -446,6 +500,7 @@ def _state_warnings(
     orderbook: OrderbookSnapshot,
     live_feature_error: str = "",
     probability_error: str = "",
+    settlement: SettlementState | None = None,
 ) -> list[str]:
     warnings: list[str] = []
     if not mapping.validation.valid:
@@ -471,6 +526,9 @@ def _state_warnings(
             for value in orderbook.summary["orderbook_reason"].dropna().unique()
             if str(value)
         )
+    if settlement is not None and not settlement.settlement_trading_allowed:
+        reason = settlement.settlement_reason or settlement.settlement_status
+        warnings.append(f"settlement_state:{settlement.settlement_status}:{reason}")
     return sorted(set(warnings))
 
 
@@ -478,6 +536,7 @@ def _artifact_warnings(
     feature_rows: pd.DataFrame,
     probabilities: pd.DataFrame,
     orderbook: pd.DataFrame,
+    settlement: SettlementState | None = None,
 ) -> list[str]:
     warnings: list[str] = []
     if feature_rows.empty:
@@ -492,6 +551,9 @@ def _artifact_warnings(
             for value in feature_rows["no_trade_reason"].dropna().unique()
             if str(value)
         )
+    if settlement is not None and not settlement.settlement_trading_allowed:
+        reason = settlement.settlement_reason or settlement.settlement_status
+        warnings.append(f"settlement_state:{settlement.settlement_status}:{reason}")
     return sorted(set(warnings))
 
 
@@ -510,6 +572,7 @@ def _status_dict(
     edge_rows: int = 0,
     live_feature_error: str = "",
     probability_scoring_error: str = "",
+    settlement: SettlementState | None = None,
 ) -> dict[str, Any]:
     scoring_status = "ERROR" if probability_scoring_error else "OK"
     if live_feature_error and not probability_scoring_error:
@@ -528,6 +591,12 @@ def _status_dict(
         "probability_rows": int(probability_rows),
         "feature_rows": int(feature_rows),
         "edge_rows": int(edge_rows),
+        "settlement_status": "" if settlement is None else settlement.settlement_status,
+        "settlement_trading_allowed": (
+            "" if settlement is None else bool(settlement.settlement_trading_allowed)
+        ),
+        "settlement_reason": "" if settlement is None else settlement.settlement_reason,
+        "probability_mode": "" if settlement is None else settlement.probability_mode,
         "warning_count": len(warnings),
         "warnings": warnings,
         "dashboard_status": "WARN" if warnings else "OK",
@@ -602,6 +671,57 @@ def _weather_frame_for_state(weather: LiveWeatherSnapshot) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True, sort=False)
 
 
+def _settlement_from_artifacts(
+    *,
+    config: TradingConfig,
+    settlement_frame: pd.DataFrame,
+    weather: pd.DataFrame,
+    features: pd.DataFrame,
+    event_ticker: str | None,
+) -> SettlementState:
+    if not settlement_frame.empty:
+        row = settlement_frame.iloc[0]
+        return SettlementState(
+            evaluated_at=str(row.get("evaluated_at", "") or ""),
+            event_ticker=str(row.get("event_ticker", "") or event_ticker or ""),
+            target_date=str(row.get("target_date", "") or ""),
+            settlement_status=str(row.get("settlement_status", "") or ""),
+            probability_mode=str(row.get("probability_mode", "") or ""),
+            settlement_trading_allowed=_bool_value(
+                row.get("settlement_trading_allowed", False)
+            ),
+            settlement_reason=str(row.get("settlement_reason", "") or ""),
+            prediction_time=str(row.get("prediction_time", "") or ""),
+            current_temp=_optional_state_float(row.get("current_temp")),
+            current_temp_time=str(row.get("current_temp_time", "") or ""),
+            observed_high=_optional_state_float(row.get("observed_high")),
+            observed_high_time=str(row.get("observed_high_time", "") or ""),
+            minutes_since_observed_high=_optional_state_float(
+                row.get("minutes_since_observed_high")
+            ),
+            current_temp_drop_from_high=_optional_state_float(
+                row.get("current_temp_drop_from_high")
+            ),
+            forecast_remaining_high=_optional_state_float(
+                row.get("forecast_remaining_high")
+            ),
+            forecast_remaining_high_time=str(
+                row.get("forecast_remaining_high_time", "") or ""
+            ),
+            daily_forecast_high=_optional_state_float(row.get("daily_forecast_high")),
+            verified_high=_optional_state_float(row.get("verified_high")),
+            verified_high_time=str(row.get("verified_high_time", "") or ""),
+            weather_no_trade_reasons=str(row.get("weather_no_trade_reasons", "") or ""),
+        )
+    return evaluate_settlement_state(
+        weather=weather,
+        feature_rows=features,
+        settings=config.settlement,
+        event_ticker=event_ticker,
+        target_date=_event_date_from_ticker(event_ticker or ""),
+    )
+
+
 def _summaries_from_orderbook(orderbook: pd.DataFrame, config: TradingConfig | None = None) -> pd.DataFrame:
     if orderbook.empty or "ticker" not in orderbook.columns or "fetched_at" not in orderbook.columns:
         return pd.DataFrame()
@@ -642,3 +762,23 @@ def _first_nonempty(frame: pd.DataFrame, column: str) -> str | None:
     if values.empty:
         return None
     return str(values.iloc[0])
+
+
+def _bool_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if pd.isna(value):
+        return False
+    return str(value).strip().lower() in {"true", "1", "yes"}
+
+
+def _optional_state_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(numeric):
+        return None
+    return numeric

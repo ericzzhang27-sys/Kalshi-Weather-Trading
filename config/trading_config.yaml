@@ -78,6 +78,19 @@ weather:
   max_unverified_observed_high_minutes: 20
   require_forecast_issue_time: false
 
+settlement:
+  # Model probabilities are allowed before the normal NYC daily-high window.
+  typical_peak_hour: 15
+  # After this local hour, a falling temperature path can force diagnostic-only
+  # POST_PEAK_NO_TRADE unless final settlement data is available.
+  peak_window_end_hour: 18
+  verified_settlement_min_hour: 18
+  post_peak_temp_drop_f: 2.0
+  min_minutes_since_high: 60
+  forecast_remaining_margin_f: 0.5
+  settlement_tail_probability: 0.01
+  block_unverified_observed_high: true
+
 risk:
   kill_switch_path: runtime/KILL_SWITCH_TRADING
   max_contracts_per_order: 1
@@ -119,6 +132,7 @@ outputs:
   live_feature_rows_path: outputs/live_trading/live_feature_rows.csv
   live_feature_freshness_path: outputs/live_trading/live_feature_freshness.csv
   live_bucket_probabilities_path: outputs/live_trading/live_bucket_probabilities.csv
+  settlement_state_path: outputs/live_trading/settlement_state.csv
   orderbook_snapshot_path: outputs/live_trading/orderbook_snapshot.csv
   orderbook_summary_path: outputs/live_trading/orderbook_summary.csv
   edge_table_path: outputs/live_trading/edge_table.csv

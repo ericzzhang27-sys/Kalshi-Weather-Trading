@@ -15,6 +15,8 @@ def test_default_trading_config_is_shadow_and_not_live_auto() -> None:
     assert config.live_auto_enabled is False
     assert config.kalshi.base_url.endswith("/trade-api/v2")
     assert config.markets.default_location == "NYC"
+    assert config.settlement.typical_peak_hour == 15
+    assert config.outputs.settlement_state_path.name == "settlement_state.csv"
 
 
 def test_live_auto_requires_explicit_enablement() -> None:
@@ -42,3 +44,15 @@ def test_live_modes_require_trading_enabled() -> None:
 def test_missing_config_path_fails(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         load_trading_config(tmp_path / "missing.yaml")
+
+
+def test_invalid_settlement_hours_fail_validation() -> None:
+    with pytest.raises(TradingConfigError, match="peak_window_end_hour"):
+        parse_trading_config(
+            {
+                "settlement": {
+                    "typical_peak_hour": 18,
+                    "peak_window_end_hour": 15,
+                }
+            }
+        )

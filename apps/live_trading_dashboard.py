@@ -212,6 +212,17 @@ def _render_status(st, state: DashboardState) -> None:
             ]
         )
     )
+    if status.get("settlement_status"):
+        st.caption(
+            " | ".join(
+                [
+                    f"Market State: {status.get('settlement_status', '')}",
+                    f"Trading Allowed: {status.get('settlement_trading_allowed', '')}",
+                    f"Probability Mode: {status.get('probability_mode', '')}",
+                    f"Reason: {status.get('settlement_reason', '')}",
+                ]
+            )
+        )
     warnings = status.get("warnings", [])
     if warnings:
         st.warning("Warnings: " + "; ".join(str(item) for item in warnings))
@@ -285,6 +296,22 @@ def _render_probability_status_note(st, probs: pd.DataFrame) -> None:
         st.info(
             "Probabilities are constrained by observed high-so-far, so buckets below the already-observed high are forced to 0%."
         )
+    if "settlement_status" in probs.columns:
+        statuses = sorted(
+            str(value)
+            for value in probs["settlement_status"].dropna().unique()
+            if str(value)
+        )
+        if statuses:
+            allowed = set(probs.get("settlement_trading_allowed", pd.Series(dtype=object)).dropna().astype(str))
+            reason = _first_nonempty_from_frames([probs], ["settlement_reason"])
+            message = f"Market state: {', '.join(statuses)}"
+            if reason:
+                message += f" ({reason})"
+            if allowed and allowed <= {"False", "false", "0"}:
+                st.warning(message)
+            else:
+                st.info(message)
 
 
 def _render_probability_context(st, state: DashboardState) -> None:
@@ -342,6 +369,9 @@ def _probability_context_summary(state: DashboardState) -> dict[str, Any]:
         "model_name": _first_nonempty_from_frames([probs], ["model_name"]) or str(status.get("model_name", "") or ""),
         "distribution_type": _first_nonempty_from_frames([probs], ["distribution_type"]),
         "calibration_method": _first_nonempty_from_frames([probs], ["calibration_method"]),
+        "settlement_status": str(status.get("settlement_status", "") or _first_nonempty_from_frames([probs], ["settlement_status"])),
+        "settlement_reason": str(status.get("settlement_reason", "") or _first_nonempty_from_frames([probs], ["settlement_reason"])),
+        "probability_mode": str(status.get("probability_mode", "") or _first_nonempty_from_frames([probs], ["probability_mode"])),
         "weather_status": _first_nonempty_from_frames([features], ["weather_status"]),
         "feature_status": _first_nonempty_from_frames([features], ["live_feature_status"]),
         "no_trade_reason": _first_nonempty_from_frames([features], ["no_trade_reason"]),
@@ -368,6 +398,7 @@ def _probability_context_records(summary: dict[str, Any]) -> list[dict[str, str]
         ("Observed high source", summary.get("observed_high_source_time", ""), summary.get("observed_high_so_far", ""), "Timestamp/value used for high-so-far."),
         ("Forecast weather", summary.get("forecast_through", ""), summary.get("forecast_source", ""), f"Daily forecast high {summary.get('forecast_high', '')}."),
         ("Forecast issue", summary.get("forecast_issue_time", ""), summary.get("calibration_method", ""), "Forecast provider issue/run timestamp, if available."),
+        ("Market state", summary.get("prediction_time", ""), summary.get("settlement_status", ""), summary.get("settlement_reason", "")),
         ("Feature freshness", summary.get("feature_source_latest", ""), summary.get("feature_status", ""), summary.get("no_trade_reason", "")),
     ]
     return [
@@ -438,6 +469,8 @@ def _render_edge(st, state: DashboardState) -> None:
             "fee_per_contract",
             "slippage_buffer",
             "net_edge",
+            "settlement_status",
+            "probability_mode",
             "edge_status",
             "no_trade_reason",
         ]
@@ -659,6 +692,7 @@ def _render_artifacts(st, state: DashboardState, config) -> None:
         "live_feature_rows.csv": state.live_feature_rows.to_csv(index=False),
         "live_feature_freshness.csv": state.feature_freshness.to_csv(index=False),
         "live_bucket_probabilities.csv": state.bucket_probabilities.to_csv(index=False),
+        "settlement_state.csv": getattr(state, "settlement_state", pd.DataFrame()).to_csv(index=False),
         "orderbook_snapshot.csv": state.orderbook.to_csv(index=False),
         "orderbook_summary.csv": orderbook_summary.to_csv(index=False),
         "edge_table.csv": edge_table.to_csv(index=False),
@@ -743,6 +777,7 @@ def _kalshi_bucket_board_display(board: pd.DataFrame) -> pd.DataFrame:
                     row.get("best_net_edge"),
                     row.get("best_edge_status"),
                 ),
+                "State": row.get("settlement_status", ""),
                 "Status": _format_board_status(row),
                 "Ticker": row.get("ticker", ""),
             }

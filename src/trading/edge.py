@@ -44,6 +44,10 @@ EDGE_COLUMNS = [
     "max_staleness_seconds",
     "orderbook_status",
     "orderbook_reason",
+    "settlement_status",
+    "settlement_reason",
+    "settlement_trading_allowed",
+    "probability_mode",
     "probability_signal_status",
     "probability_signal_reason",
     "fee_rate",
@@ -258,6 +262,10 @@ def _edge_record(
         "max_staleness_seconds": settings.max_staleness_seconds,
         "orderbook_status": row.get("orderbook_status"),
         "orderbook_reason": row.get("orderbook_reason"),
+        "settlement_status": row.get("settlement_status"),
+        "settlement_reason": row.get("settlement_reason"),
+        "settlement_trading_allowed": row.get("settlement_trading_allowed"),
+        "probability_mode": row.get("probability_mode"),
         "probability_signal_status": row.get("probability_signal_status"),
         "probability_signal_reason": row.get("probability_signal_reason"),
         "fee_rate": settings.fee_rate,
@@ -287,6 +295,11 @@ def _no_trade_reasons(
     if probability_status != "OK":
         reason = str(row.get("probability_signal_reason", "") or probability_status).strip()
         reasons.append(f"probability_signal:{reason}")
+
+    if _explicit_false(row.get("settlement_trading_allowed")):
+        status = str(row.get("settlement_status", "") or "settlement_state").strip()
+        reason = str(row.get("settlement_reason", "") or status).strip()
+        reasons.append(f"settlement_state:{reason}")
 
     orderbook_status = str(row.get("orderbook_status", "") or "").strip()
     orderbook_reason = str(row.get("orderbook_reason", "") or "").strip()
@@ -397,6 +410,19 @@ def _optional_float(value: Any) -> float | None:
 
 def _finite(value: Any) -> bool:
     return _optional_float(value) is not None
+
+
+def _explicit_false(value: Any) -> bool:
+    if value is None or value == "":
+        return False
+    if isinstance(value, bool):
+        return not value
+    try:
+        if pd.isna(value):
+            return False
+    except TypeError:
+        pass
+    return str(value).strip().lower() in {"false", "0", "no"}
 
 
 def _validate_price(value: Any) -> None:

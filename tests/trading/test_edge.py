@@ -64,6 +64,21 @@ def test_compute_edge_table_rejects_stale_or_missing_orderbooks() -> None:
     assert edge["no_trade_reason"].str.contains("stale_orderbook").all()
 
 
+def test_compute_edge_table_rejects_settlement_no_trade_state() -> None:
+    probabilities = _probabilities(probability=0.70)
+    probabilities["settlement_status"] = "POST_PEAK_NO_TRADE"
+    probabilities["settlement_reason"] = "post_peak_temperature_path_no_verified_settlement"
+    probabilities["settlement_trading_allowed"] = False
+    probabilities["probability_mode"] = "diagnostic_no_trade"
+    orderbooks = _orderbook_summary(best_yes_ask=0.60, best_no_ask=0.45)
+
+    edge = compute_edge_table(probabilities, orderbooks, evaluated_at=EVALUATED_AT)
+
+    assert set(edge["edge_status"]) == {"NO_TRADE"}
+    assert edge["no_trade_reason"].str.contains("settlement_state:").all()
+    assert set(edge["settlement_status"]) == {"POST_PEAK_NO_TRADE"}
+
+
 def _probabilities(probability: float) -> pd.DataFrame:
     return pd.DataFrame(
         [

@@ -70,6 +70,7 @@ class OutputSettings:
     live_feature_rows_path: Path
     live_feature_freshness_path: Path
     live_bucket_probabilities_path: Path
+    settlement_state_path: Path
     orderbook_snapshot_path: Path
     orderbook_summary_path: Path
     edge_table_path: Path
@@ -152,6 +153,18 @@ class LiveWeatherSettings:
 
 
 @dataclass(frozen=True)
+class SettlementSettings:
+    typical_peak_hour: int = 15
+    peak_window_end_hour: int = 18
+    verified_settlement_min_hour: int = 18
+    post_peak_temp_drop_f: float = 2.0
+    min_minutes_since_high: int = 60
+    forecast_remaining_margin_f: float = 0.5
+    settlement_tail_probability: float = 0.01
+    block_unverified_observed_high: bool = True
+
+
+@dataclass(frozen=True)
 class TradingConfig:
     mode: str
     trading_enabled: bool
@@ -159,6 +172,7 @@ class TradingConfig:
     kalshi: KalshiSettings
     markets: MarketSettings
     weather: LiveWeatherSettings
+    settlement: SettlementSettings
     edge: EdgeSettings
     paper: PaperSettings
     outputs: OutputSettings
@@ -184,6 +198,7 @@ def parse_trading_config(raw: dict[str, Any]) -> TradingConfig:
     kalshi = _parse_kalshi_settings(raw.get("kalshi", {}))
     markets = _parse_market_settings(raw.get("markets", {}))
     weather = _parse_live_weather_settings(raw.get("weather", {}))
+    settlement = _parse_settlement_settings(raw.get("settlement", {}))
     edge = _parse_edge_settings(raw.get("edge", {}))
     paper = _parse_paper_settings(raw.get("paper", {}))
     outputs = _parse_output_settings(raw.get("outputs", {}))
@@ -196,6 +211,7 @@ def parse_trading_config(raw: dict[str, Any]) -> TradingConfig:
         kalshi=kalshi,
         markets=markets,
         weather=weather,
+        settlement=settlement,
         edge=edge,
         paper=paper,
         outputs=outputs,
@@ -245,6 +261,28 @@ def validate_trading_config(config: TradingConfig) -> None:
     if config.weather.max_unverified_observed_high_minutes < 0:
         raise TradingConfigError(
             "weather.max_unverified_observed_high_minutes must be nonnegative"
+        )
+    if not 0 <= config.settlement.typical_peak_hour <= 23:
+        raise TradingConfigError("settlement.typical_peak_hour must be between 0 and 23")
+    if not 0 <= config.settlement.peak_window_end_hour <= 23:
+        raise TradingConfigError("settlement.peak_window_end_hour must be between 0 and 23")
+    if config.settlement.peak_window_end_hour < config.settlement.typical_peak_hour:
+        raise TradingConfigError(
+            "settlement.peak_window_end_hour must be at or after typical_peak_hour"
+        )
+    if not 0 <= config.settlement.verified_settlement_min_hour <= 23:
+        raise TradingConfigError(
+            "settlement.verified_settlement_min_hour must be between 0 and 23"
+        )
+    if config.settlement.post_peak_temp_drop_f < 0.0:
+        raise TradingConfigError("settlement.post_peak_temp_drop_f must be nonnegative")
+    if config.settlement.min_minutes_since_high < 0:
+        raise TradingConfigError("settlement.min_minutes_since_high must be nonnegative")
+    if config.settlement.forecast_remaining_margin_f < 0.0:
+        raise TradingConfigError("settlement.forecast_remaining_margin_f must be nonnegative")
+    if not 0.0 <= config.settlement.settlement_tail_probability <= 0.5:
+        raise TradingConfigError(
+            "settlement.settlement_tail_probability must be between 0 and 0.5"
         )
     if config.risk.max_contracts_per_order < 1:
         raise TradingConfigError("risk.max_contracts_per_order must be positive")
@@ -363,6 +401,12 @@ def _parse_output_settings(raw: Any) -> OutputSettings:
                 "outputs/live_trading/live_bucket_probabilities.csv",
             )
         ),
+        settlement_state_path=_repo_path(
+            data.get(
+                "settlement_state_path",
+                "outputs/live_trading/settlement_state.csv",
+            )
+        ),
         orderbook_snapshot_path=_repo_path(
             data.get(
                 "orderbook_snapshot_path",
@@ -449,6 +493,20 @@ def _parse_edge_settings(raw: Any) -> EdgeSettings:
         balance_rounding_increment=float(
             data.get("balance_rounding_increment", 0.01)
         ),
+    )
+
+
+def _parse_settlement_settings(raw: Any) -> SettlementSettings:
+    data = _mapping(raw, "settlement")
+    return SettlementSettings(
+        typical_peak_hour=int(data.get("typical_peak_hour", 15)),
+        peak_window_end_hour=int(data.get("peak_window_end_hour", 18)),
+        verified_settlement_min_hour=int(data.get("verified_settlement_min_hour", 18)),
+        post_peak_temp_drop_f=float(data.get("post_peak_temp_drop_f", 2.0)),
+        min_minutes_since_high=int(data.get("min_minutes_since_high", 60)),
+        forecast_remaining_margin_f=float(data.get("forecast_remaining_margin_f", 0.5)),
+        settlement_tail_probability=float(data.get("settlement_tail_probability", 0.01)),
+        block_unverified_observed_high=bool(data.get("block_unverified_observed_high", True)),
     )
 
 

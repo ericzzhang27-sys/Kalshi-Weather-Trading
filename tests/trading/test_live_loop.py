@@ -53,6 +53,9 @@ def _dashboard_state() -> DashboardState:
             "event_ticker": "KXHIGHNY-26JUN04",
             "target_date": "2026-06-04",
             "dashboard_status": "OK",
+            "settlement_status": "PRE_PEAK_FORECAST",
+            "settlement_trading_allowed": True,
+            "probability_mode": "ngboost_forecast",
             "probability_rows": 1,
             "warnings": [],
         },
@@ -63,6 +66,7 @@ def _dashboard_state() -> DashboardState:
         feature_freshness=pd.DataFrame(),
         bucket_probabilities=pd.DataFrame(),
         distribution_params=pd.DataFrame(),
+        settlement_state=pd.DataFrame(),
         orderbook=pd.DataFrame(),
         orderbook_summary=pd.DataFrame(),
         edge_table=pd.DataFrame(
