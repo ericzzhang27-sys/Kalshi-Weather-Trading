@@ -754,6 +754,9 @@ def _daily_forecast_frame_from_nws_payload(
             result = result.drop(columns=["forecast_issue_time_period"])
     if result.empty:
         return _empty_weather_frame(source_role="daily_forecast")
+    result["date"] = pd.to_datetime(result["date"], errors="raise").dt.normalize()
+    result["target_date"] = result["date"]
+    result = result.drop(columns=["target_date_period"], errors="ignore")
     return result.sort_values(["location", "date"]).reset_index(drop=True)
 
 
@@ -778,6 +781,7 @@ def _daily_frame_from_hourly_nws_forecasts(
         records.append(
             {
                 "date": pd.Timestamp(day).normalize(),
+                "target_date": pd.Timestamp(day).normalize(),
                 "location": location,
                 "source_role": "daily_forecast",
                 "forecast_source": NWS_FORECAST_SOURCE,
@@ -821,6 +825,7 @@ def _daily_period_frame_from_nws_payload(
             day,
             {
                 "date": day,
+                "target_date": day,
                 "location": location,
                 "source_role": "daily_forecast",
                 "forecast_source": NWS_FORECAST_SOURCE,

@@ -32,6 +32,21 @@ class FakeNwsObservationClient:
         return self.payload
 
 
+class FakeNwsForecastClient:
+    def __init__(self):
+        self.point_payload = _nws_point_payload()
+        self.hourly_payload = _nws_hourly_forecast_payload()
+        self.daily_payload = _nws_daily_forecast_payload()
+
+    def fetch_point_metadata(self, latitude, longitude):
+        return self.point_payload
+
+    def fetch_forecast_url(self, url):
+        if str(url).endswith("/hourly"):
+            return self.hourly_payload
+        return self.daily_payload
+
+
 def _observation_payload():
     times = [
         "2026-06-02T06:00",
@@ -251,6 +266,31 @@ def test_probability_engine_accepts_live_feature_row() -> None:
     assert params["sigma"].iloc[0] > 0
 
 
+def test_nws_forecasts_build_live_feature_rows() -> None:
+    config = parse_trading_config(
+        {"weather": {"provider": "nws", "observations_provider": "nws_station"}}
+    )
+    weather = fetch_live_weather(
+        location="NYC",
+        target_date=date(2026, 6, 2),
+        prediction_time=datetime(2026, 6, 2, 12, 0),
+        config=config,
+        client=FakeNwsForecastClient(),
+        observation_client=FakeNwsObservationClient(_nws_observation_payload()),
+    )
+
+    rows = build_live_feature_rows(
+        weather=weather,
+        mapping=_mapping(),
+        feature_list_path=DEFAULT_FEATURE_LIST_PATH,
+    )
+
+    assert len(rows) == 1
+    assert rows["target_date"].iloc[0] == pd.Timestamp("2026-06-02")
+    assert rows["live_feature_status"].iloc[0] == "SCOREABLE_SHADOW"
+    assert weather.daily_forecast["target_date"].iloc[0] == pd.Timestamp("2026-06-02")
+
+
 def test_stale_nws_observations_fall_back_to_proxy_features() -> None:
     config = parse_trading_config({"weather": {"observations_provider": "nws_station"}})
     client = FakeOpenMeteoClient([_forecast_payload(), _observation_payload()])
@@ -327,5 +367,168 @@ def _stale_nws_payload():
                     "rawMessage": "KNYC 021000Z AUTO 18004KT 10SM CLR 22/12 A2983 RMK AO2 T02200120",
                 }
             }
+        ]
+    }
+
+
+def _nws_point_payload():
+    return {
+        "properties": {
+            "forecastHourly": "https://api.weather.gov/gridpoints/OKX/34,46/forecast/hourly",
+            "forecast": "https://api.weather.gov/gridpoints/OKX/34,46/forecast",
+        }
+    }
+
+
+def _nws_hourly_forecast_payload():
+    return {
+        "properties": {
+            "units": "us",
+            "updateTime": "2026-06-02T10:45:00+00:00",
+            "generatedAt": "2026-06-02T11:00:00+00:00",
+            "periods": [
+                {
+                    "number": 1,
+                    "name": "",
+                    "startTime": "2026-06-02T09:00:00-04:00",
+                    "endTime": "2026-06-02T10:00:00-04:00",
+                    "isDaytime": True,
+                    "temperature": 76,
+                    "temperatureUnit": "F",
+                    "probabilityOfPrecipitation": {
+                        "unitCode": "wmoUnit:percent",
+                        "value": 10,
+                    },
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 13},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 48},
+                    "windSpeed": "5 mph",
+                    "windDirection": "SW",
+                    "shortForecast": "Mostly Sunny",
+                    "detailedForecast": "",
+                },
+                {
+                    "number": 2,
+                    "name": "",
+                    "startTime": "2026-06-02T10:00:00-04:00",
+                    "endTime": "2026-06-02T11:00:00-04:00",
+                    "isDaytime": True,
+                    "temperature": 78,
+                    "temperatureUnit": "F",
+                    "probabilityOfPrecipitation": {
+                        "unitCode": "wmoUnit:percent",
+                        "value": 12,
+                    },
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 14},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 45},
+                    "windSpeed": "6 to 10 mph",
+                    "windDirection": "SW",
+                    "shortForecast": "Mostly Sunny",
+                    "detailedForecast": "Southwest wind 6 to 10 mph.",
+                },
+                {
+                    "number": 3,
+                    "name": "",
+                    "startTime": "2026-06-02T11:00:00-04:00",
+                    "endTime": "2026-06-02T12:00:00-04:00",
+                    "isDaytime": True,
+                    "temperature": 79,
+                    "temperatureUnit": "F",
+                    "probabilityOfPrecipitation": {
+                        "unitCode": "wmoUnit:percent",
+                        "value": 15,
+                    },
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 15},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 43},
+                    "windSpeed": "8 mph",
+                    "windDirection": "SW",
+                    "shortForecast": "Partly Sunny",
+                    "detailedForecast": "Southwest wind 8 mph, with gusts as high as 18 mph.",
+                },
+            ],
+        }
+    }
+
+
+def _nws_daily_forecast_payload():
+    return {
+        "properties": {
+            "units": "us",
+            "updateTime": "2026-06-02T10:45:00+00:00",
+            "generatedAt": "2026-06-02T11:00:00+00:00",
+            "periods": [
+                {
+                    "number": 1,
+                    "name": "Today",
+                    "startTime": "2026-06-02T06:00:00-04:00",
+                    "endTime": "2026-06-02T18:00:00-04:00",
+                    "isDaytime": True,
+                    "temperature": 80,
+                    "temperatureUnit": "F",
+                    "probabilityOfPrecipitation": {
+                        "unitCode": "wmoUnit:percent",
+                        "value": 15,
+                    },
+                    "windSpeed": "6 to 12 mph",
+                    "windDirection": "SW",
+                    "shortForecast": "Partly Sunny",
+                    "detailedForecast": "Partly sunny, with a high near 80.",
+                },
+                {
+                    "number": 2,
+                    "name": "Tonight",
+                    "startTime": "2026-06-02T18:00:00-04:00",
+                    "endTime": "2026-06-03T06:00:00-04:00",
+                    "isDaytime": False,
+                    "temperature": 69,
+                    "temperatureUnit": "F",
+                    "probabilityOfPrecipitation": {
+                        "unitCode": "wmoUnit:percent",
+                        "value": 5,
+                    },
+                    "windSpeed": "5 mph",
+                    "windDirection": "SW",
+                    "shortForecast": "Mostly Clear",
+                    "detailedForecast": "Mostly clear, with a low around 69.",
+                },
+            ],
+        }
+    }
+
+
+def _nws_observation_payload():
+    return {
+        "features": [
+            {
+                "properties": {
+                    "timestamp": "2026-06-02T15:00:00+00:00",
+                    "temperature": {"unitCode": "wmoUnit:degC", "value": 23.0},
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 10.0},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 43.0},
+                    "windDirection": {"unitCode": "wmoUnit:degree_(angle)", "value": 180},
+                    "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 8.0},
+                    "windGust": {"unitCode": "wmoUnit:km_h-1", "value": 16.0},
+                    "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 101000},
+                    "precipitationLastHour": {"unitCode": "wmoUnit:mm", "value": 0.0},
+                    "cloudLayers": [{"amount": "CLR", "base": {"value": None}}],
+                    "textDescription": "Clear",
+                    "rawMessage": "KNYC 021500Z AUTO",
+                }
+            },
+            {
+                "properties": {
+                    "timestamp": "2026-06-02T16:00:00+00:00",
+                    "temperature": {"unitCode": "wmoUnit:degC", "value": 25.0},
+                    "dewpoint": {"unitCode": "wmoUnit:degC", "value": 10.0},
+                    "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 38.0},
+                    "windDirection": {"unitCode": "wmoUnit:degree_(angle)", "value": 200},
+                    "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 10.0},
+                    "windGust": {"unitCode": "wmoUnit:km_h-1", "value": None},
+                    "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 101200},
+                    "precipitationLastHour": {"unitCode": "wmoUnit:mm", "value": 2.54},
+                    "cloudLayers": [{"amount": "SCT", "base": {"value": 1200}}],
+                    "textDescription": "Partly Cloudy",
+                    "rawMessage": "KNYC 021600Z AUTO 20006KT 10SM SCT040 25/10 A2988 RMK AO2 T02500100 10283",
+                }
+            },
         ]
     }

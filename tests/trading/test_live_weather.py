@@ -413,6 +413,7 @@ def test_nws_forecasts_are_converted_to_feature_compatible_frames() -> None:
     assert snapshot.hourly_forecasts["dew_point_2m"].iloc[0] == 55.4
     assert snapshot.daily_forecast["forecast_high"].iloc[0] == 79.0
     assert "forecast_high" in snapshot.daily_forecast.columns
+    assert "target_date" in snapshot.daily_forecast.columns
     issue_diag = snapshot.diagnostics[
         snapshot.diagnostics["diagnostic_name"] == "forecast_issue_time_present"
     ].iloc[0]
