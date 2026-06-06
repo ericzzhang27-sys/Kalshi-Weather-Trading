@@ -322,6 +322,31 @@ def _normalize_location_column(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def _with_target_date_column(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    result = df.copy()
+    if "target_date" not in result.columns:
+        source_col = None
+        if "date" in result.columns:
+            source_col = "date"
+        elif "timestamp" in result.columns:
+            source_col = "timestamp"
+        else:
+            source_col = _first_existing(result, VALID_TIME_CANDIDATES)
+        if source_col is not None:
+            result["target_date"] = pd.to_datetime(
+                result[source_col],
+                errors="coerce",
+            ).dt.normalize()
+    elif "target_date" in result.columns:
+        result["target_date"] = pd.to_datetime(
+            result["target_date"],
+            errors="coerce",
+        ).dt.normalize()
+    return result
+
+
 def _standardize_rows(df: pd.DataFrame) -> pd.DataFrame:
     result = _normalize_location_column(df)
 
@@ -612,6 +637,8 @@ def _build_cumulative_max_table(
 ) -> pd.DataFrame:
     pieces: list[pd.DataFrame] = []
     required_cols = ["location", "target_date", "timestamp", temp_col]
+    if not set(required_cols).issubset(hourly.columns):
+        return pd.DataFrame(columns=["location", "target_date", "timestamp", output_col, source_col])
     working = hourly.dropna(subset=["location", "target_date", "timestamp"]).loc[:, required_cols].copy()
     for _, group in working.sort_values("timestamp").groupby(["location", "target_date"], dropna=False):
         max_values: list[float] = []
@@ -638,6 +665,19 @@ def _build_cumulative_max_table(
 def _build_observed_context_table(hourly: pd.DataFrame, temp_col: str) -> pd.DataFrame:
     pieces: list[pd.DataFrame] = []
     required_cols = ["location", "target_date", "timestamp", temp_col]
+    if not set(required_cols).issubset(hourly.columns):
+        return pd.DataFrame(
+            columns=[
+                "location",
+                "target_date",
+                "timestamp",
+                "min_temp_so_far",
+                "temp_range_so_far",
+                "area_under_temp_curve_so_far",
+                "near_boundary_duration_so_far",
+                "num_new_highs_last_3h",
+            ],
+        )
     working = hourly.dropna(subset=["location", "target_date", "timestamp"]).loc[
         :,
         required_cols,
@@ -744,6 +784,12 @@ def _build_cumulative_temp_error_table(
     ]
     if hourly.empty or hourly_forecasts.empty:
         return pd.DataFrame(columns=output_columns)
+    required_observed = {"location", "target_date", "timestamp", temp_col}
+    required_forecast = {"location", "target_date", "timestamp", forecast_temp_col}
+    if not required_observed.issubset(hourly.columns) or not required_forecast.issubset(
+        hourly_forecasts.columns
+    ):
+        return pd.DataFrame(columns=output_columns)
 
     observed = hourly.loc[:, ["location", "target_date", "timestamp", temp_col]].rename(
         columns={temp_col: "actual_temp_for_error"},
@@ -776,6 +822,7 @@ def _build_cumulative_temp_error_table(
 def add_observed_weather_features(rows: pd.DataFrame, hourly: pd.DataFrame) -> pd.DataFrame:
     result = rows.copy()
     _merge_notes(result, rows)
+    hourly = _with_target_date_column(hourly)
 
     if hourly.empty:
         for column in [
@@ -938,6 +985,10 @@ def _select_latest_forecast_rows_with_issue(
     for column in output_cols:
         result[column] = pd.NaT if column.endswith("_time") else np.nan
 
+    required_cols = {"location", "target_date", issue_col, valid_col}
+    if not required_cols.issubset(hourly_forecasts.columns):
+        return result
+
     for row_index, row in rows.iterrows():
         candidates = hourly_forecasts[
             (hourly_forecasts["location"] == row["location"])
@@ -982,6 +1033,9 @@ def _next_3h_from_issued_forecasts(
 
     if cloud_col is None and precip_prob_col is None:
         return result
+    required_cols = {"location", "target_date", issue_col, valid_col}
+    if not required_cols.issubset(hourly_forecasts.columns):
+        return result
 
     for row_index, row in rows.iterrows():
         candidates = hourly_forecasts[
@@ -1020,6 +1074,7 @@ def add_forecast_relative_features(
 ) -> pd.DataFrame:
     result = rows.copy()
     _merge_notes(result, rows)
+    hourly_forecasts = _with_target_date_column(hourly_forecasts)
 
     if "forecast_high" in result.columns:
         result["forecast_high"] = pd.to_numeric(result["forecast_high"], errors="coerce")
@@ -1059,6 +1114,7 @@ def add_forecast_relative_features(
     if valid_col != "timestamp":
         forecast_work["timestamp"] = forecast_work[valid_col]
         valid_col = "timestamp"
+    forecast_work = _with_target_date_column(forecast_work)
 
     if issue_col is not None:
         selected = _select_latest_forecast_rows_with_issue(
@@ -1082,6 +1138,14 @@ def add_forecast_relative_features(
         for column in next_3h.columns:
             result[column] = next_3h[column]
     else:
+        required_current = {"location", "target_date", "timestamp", "temperature_2m"}
+        if not required_current.issubset(forecast_work.columns):
+            _append_note(
+                result,
+                "Forecast-relative hourly features skipped; hourly forecast target_date "
+                "could not be derived.",
+            )
+            return result
         current_forecast = _latest_at_or_before(
             result,
             forecast_work.loc[:, ["location", "target_date", "timestamp", "temperature_2m"]],
@@ -1147,6 +1211,8 @@ def add_sequential_context_features(
 ) -> pd.DataFrame:
     result = rows.copy()
     _merge_notes(result, rows)
+    hourly = _with_target_date_column(hourly)
+    hourly_forecasts = _with_target_date_column(hourly_forecasts)
 
     for column in SEQUENTIAL_CONTEXT_FEATURES:
         if column not in result.columns:
@@ -1276,6 +1342,7 @@ def add_solar_time_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_forecast_update_features(rows: pd.DataFrame, forecasts: pd.DataFrame) -> pd.DataFrame:
     result = rows.copy()
     _merge_notes(result, rows)
+    forecasts = _with_target_date_column(forecasts)
 
     if forecasts.empty:
         _append_note(result, "Forecast update features skipped because forecasts_clean.csv is missing.")
@@ -1394,29 +1461,40 @@ def build_feature_matrix(
     result = add_time_features(result)
 
     hourly = inputs.get("hourly", _empty_frame())
+    hourly = _with_target_date_column(hourly) if isinstance(hourly, pd.DataFrame) else _empty_frame()
     result = add_observed_weather_features(
         result,
-        hourly if isinstance(hourly, pd.DataFrame) else _empty_frame(),
+        hourly,
     )
 
     hourly_forecasts = inputs.get("hourly_forecasts", _empty_frame())
+    hourly_forecasts = (
+        _with_target_date_column(hourly_forecasts)
+        if isinstance(hourly_forecasts, pd.DataFrame)
+        else _empty_frame()
+    )
     result = add_forecast_relative_features(
         result,
-        hourly_forecasts if isinstance(hourly_forecasts, pd.DataFrame) else _empty_frame(),
+        hourly_forecasts,
     )
 
     result = add_sequential_context_features(
         result,
-        hourly if isinstance(hourly, pd.DataFrame) else _empty_frame(),
-        hourly_forecasts if isinstance(hourly_forecasts, pd.DataFrame) else _empty_frame(),
+        hourly,
+        hourly_forecasts,
     )
 
     result = add_solar_time_features(result)
 
     forecasts = inputs.get("forecasts", _empty_frame())
+    forecasts = (
+        _with_target_date_column(forecasts)
+        if isinstance(forecasts, pd.DataFrame)
+        else _empty_frame()
+    )
     result = add_forecast_update_features(
         result,
-        forecasts if isinstance(forecasts, pd.DataFrame) else _empty_frame(),
+        forecasts,
     )
 
     result = handle_missing_features(result, missingness_output_path=missingness_output_path)

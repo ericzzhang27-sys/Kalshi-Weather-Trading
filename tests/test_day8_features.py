@@ -154,7 +154,6 @@ def test_sequential_context_features_are_cumulative_and_timestamp_safe() -> None
 def test_forecast_update_features_skip_forecasts_without_target_date() -> None:
     forecasts = pd.DataFrame(
         {
-            "date": pd.to_datetime(["2026-05-20"]),
             "location": ["NYC"],
             "forecast_issue_time": pd.to_datetime(["2026-05-20 08:00"]),
             "forecast_high": [100.0],
@@ -165,6 +164,29 @@ def test_forecast_update_features_skip_forecasts_without_target_date() -> None:
 
     assert len(featured) == 1
     assert "recent_forecast_revision" not in featured.columns
+
+
+def test_feature_matrix_derives_missing_weather_target_dates() -> None:
+    inputs = {
+        "rows": _sample_rows(),
+        "hourly": _sample_hourly().drop(columns=["target_date"]),
+        "hourly_forecasts": _sample_hourly_forecasts().drop(columns=["target_date"]),
+        "forecasts": pd.DataFrame(
+            {
+                "date": pd.to_datetime(["2026-05-20"]),
+                "location": ["NYC"],
+                "forecast_issue_time": pd.to_datetime(["2026-05-20 08:00"]),
+                "forecast_high": [100.0],
+            }
+        ),
+        "notes": [],
+    }
+
+    featured = build_feature_matrix(inputs)
+
+    assert len(featured) == 2
+    assert featured["max_temp_so_far"].notna().all()
+    assert featured["forecast_temp_current_hour"].notna().all()
 
 
 def test_feature_columns_exclude_target_and_actual_high(tmp_path: Path) -> None:
