@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime
 import json
 import subprocess
@@ -289,6 +290,44 @@ def test_nws_forecasts_build_live_feature_rows() -> None:
     assert rows["target_date"].iloc[0] == pd.Timestamp("2026-06-02")
     assert rows["live_feature_status"].iloc[0] == "SCOREABLE_SHADOW"
     assert weather.daily_forecast["target_date"].iloc[0] == pd.Timestamp("2026-06-02")
+
+
+def test_live_feature_rows_normalize_weather_frames_missing_target_date() -> None:
+    config = parse_trading_config(
+        {"weather": {"provider": "nws", "observations_provider": "nws_station"}}
+    )
+    weather = fetch_live_weather(
+        location="NYC",
+        target_date=date(2026, 6, 2),
+        prediction_time=datetime(2026, 6, 2, 12, 0),
+        config=config,
+        client=FakeNwsForecastClient(),
+        observation_client=FakeNwsObservationClient(_nws_observation_payload()),
+    )
+    weather = replace(
+        weather,
+        hourly_observations=weather.hourly_observations.drop(
+            columns=["target_date"],
+            errors="ignore",
+        ),
+        hourly_forecasts=weather.hourly_forecasts.drop(
+            columns=["target_date"],
+            errors="ignore",
+        ),
+        daily_forecast=weather.daily_forecast.drop(
+            columns=["target_date"],
+            errors="ignore",
+        ),
+    )
+
+    rows = build_live_feature_rows(
+        weather=weather,
+        mapping=_mapping(),
+        feature_list_path=DEFAULT_FEATURE_LIST_PATH,
+    )
+
+    assert len(rows) == 1
+    assert rows["target_date"].iloc[0] == pd.Timestamp("2026-06-02")
 
 
 def test_stale_nws_observations_fall_back_to_proxy_features() -> None:

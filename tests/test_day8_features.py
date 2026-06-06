@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.features import (  # noqa: E402
+    add_forecast_update_features,
     add_observed_weather_features,
     add_time_features,
     build_feature_matrix,
@@ -148,6 +149,22 @@ def test_sequential_context_features_are_cumulative_and_timestamp_safe() -> None
     assert row_9am["max_temp_so_far"] < 110.0
     assert row_9am["temp_range_so_far"] < 50.0
     assert row_9am["area_under_temp_curve_so_far"] < row_11am["area_under_temp_curve_so_far"]
+
+
+def test_forecast_update_features_skip_forecasts_without_target_date() -> None:
+    forecasts = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-05-20"]),
+            "location": ["NYC"],
+            "forecast_issue_time": pd.to_datetime(["2026-05-20 08:00"]),
+            "forecast_high": [100.0],
+        }
+    )
+
+    featured = add_forecast_update_features(_sample_rows().iloc[[0]], forecasts)
+
+    assert len(featured) == 1
+    assert "recent_forecast_revision" not in featured.columns
 
 
 def test_feature_columns_exclude_target_and_actual_high(tmp_path: Path) -> None:

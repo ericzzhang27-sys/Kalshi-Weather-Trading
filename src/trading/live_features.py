@@ -40,12 +40,15 @@ def build_live_feature_rows(
     if not mapping.validation.valid:
         raise ValueError(f"Contract mapping is not valid: {mapping.validation.no_trade_reason}")
 
-    base_rows = _base_prediction_rows(weather, mapping)
+    hourly_observations = _weather_feature_frame(weather.hourly_observations)
+    hourly_forecasts = _weather_feature_frame(weather.hourly_forecasts)
+    daily_forecast = _weather_feature_frame(weather.daily_forecast)
+    base_rows = _base_prediction_rows(weather, mapping, daily_forecast=daily_forecast)
     inputs: dict[str, pd.DataFrame | list[str]] = {
         "rows": base_rows,
-        "hourly": weather.hourly_observations,
-        "hourly_forecasts": weather.hourly_forecasts,
-        "forecasts": weather.daily_forecast,
+        "hourly": hourly_observations,
+        "hourly_forecasts": hourly_forecasts,
+        "forecasts": daily_forecast,
         "daily": pd.DataFrame(),
         "notes": [
             "Live Day 2 row built from Open-Meteo-compatible current/forecast data.",
@@ -139,11 +142,18 @@ def save_live_feature_outputs(
 def _base_prediction_rows(
     weather: LiveWeatherSnapshot,
     mapping: ContractMappingResult,
+    *,
+    daily_forecast: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     target_ts = pd.Timestamp(weather.target_date)
-    daily = weather.daily_forecast
+    daily = _weather_feature_frame(
+        weather.daily_forecast if daily_forecast is None else daily_forecast
+    )
     if daily.empty or "forecast_high" not in daily.columns:
         raise ValueError("Live weather snapshot is missing daily forecast_high")
+    if "date" not in daily.columns and "target_date" in daily.columns:
+        daily = daily.copy()
+        daily["date"] = pd.to_datetime(daily["target_date"], errors="coerce").dt.normalize()
     target_rows = daily[daily["date"] == target_ts]
     if target_rows.empty:
         raise ValueError(f"Live weather snapshot has no daily forecast for {weather.target_date}")
@@ -166,6 +176,26 @@ def _base_prediction_rows(
             }
         ]
     )
+
+
+def _weather_feature_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    result = frame.copy()
+    if "target_date" not in result.columns:
+        if "date" in result.columns:
+            result["target_date"] = pd.to_datetime(result["date"], errors="coerce").dt.normalize()
+        elif "timestamp" in result.columns:
+            result["target_date"] = pd.to_datetime(
+                result["timestamp"],
+                errors="coerce",
+            ).dt.normalize()
+    if "target_date" in result.columns:
+        result["target_date"] = pd.to_datetime(
+            result["target_date"],
+            errors="coerce",
+        ).dt.normalize()
+    return result
 
 
 def _weather_status(weather: LiveWeatherSnapshot) -> tuple[str, str]:

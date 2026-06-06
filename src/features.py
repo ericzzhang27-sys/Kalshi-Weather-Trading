@@ -1296,6 +1296,15 @@ def add_forecast_update_features(rows: pd.DataFrame, forecasts: pd.DataFrame) ->
             "Forecast update features skipped; forecasts_clean.csv has no forecast_high column.",
         )
         return result
+    required_columns = {"location", "target_date", issue_col}
+    missing_columns = sorted(required_columns - set(forecasts.columns))
+    if missing_columns:
+        _append_note(
+            result,
+            "Forecast update features skipped; forecasts_clean.csv is missing "
+            f"required columns: {missing_columns}.",
+        )
+        return result
 
     revisions = pd.DataFrame(index=result.index)
     revisions["recent_forecast_revision"] = np.nan
