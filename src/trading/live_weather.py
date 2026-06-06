@@ -264,9 +264,10 @@ def fetch_live_weather(
     fetched_at: datetime | None = None,
 ) -> LiveWeatherSnapshot:
     settings = config.weather
+    provider_name = "open_meteo" if settings.provider == "open_meteo" else "nws"
     open_meteo_client = (
         client
-        if settings.provider == "open_meteo" and client is not None
+        if provider_name == "open_meteo" and client is not None
         else OpenMeteoClient(
             base_url=settings.forecast_base_url,
             timeout_seconds=config.kalshi.request_timeout_seconds,
@@ -274,7 +275,7 @@ def fetch_live_weather(
     )
     nws_forecast_client = (
         client
-        if settings.provider == "nws" and client is not None
+        if provider_name == "nws" and client is not None
         else NwsForecastClient(
             base_url=settings.nws_station.base_url,
             user_agent=settings.nws_station.user_agent,
@@ -282,15 +283,13 @@ def fetch_live_weather(
         )
     )
     provider_client = open_meteo_client
-    if settings.provider == "open_meteo":
+    if provider_name == "open_meteo":
         provider_client = open_meteo_client
-    elif settings.provider == "nws":
-        provider_client = nws_forecast_client
     else:
-        raise ValueError(f"Unsupported live weather provider: {settings.provider}")
+        provider_client = nws_forecast_client
     open_meteo_fallback_client = (
         open_meteo_client
-        if settings.provider == "open_meteo"
+        if provider_name == "open_meteo"
         else OpenMeteoClient(
             base_url=settings.forecast_base_url,
             timeout_seconds=config.kalshi.request_timeout_seconds,
@@ -340,7 +339,7 @@ def fetch_live_weather(
                 forecast_days=1,
             )
         )
-    if settings.provider == "nws":
+    if provider_name == "nws":
         forecast_payload = _fetch_nws_forecast_payload(
             provider_client,
             latitude=settings.forecast_grid.latitude,
@@ -422,7 +421,7 @@ def fetch_live_weather(
             source_name=LIVE_OBSERVATION_SOURCE,
             include_current=True,
         )
-    if settings.provider == "nws":
+    if provider_name == "nws":
         hourly_forecasts = _hourly_frame_from_nws_forecast_payload(
             forecast_payload,
             location=location,

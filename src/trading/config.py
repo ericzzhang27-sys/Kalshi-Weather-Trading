@@ -246,12 +246,8 @@ def validate_trading_config(config: TradingConfig) -> None:
         raise TradingConfigError("markets.page_limit must be between 1 and 1000")
     if config.markets.max_pages < 1:
         raise TradingConfigError("markets.max_pages must be positive")
-    if config.weather.provider not in {"open_meteo", "nws"}:
-        raise TradingConfigError("weather.provider must be open_meteo or nws")
-    if config.weather.observations_provider not in {"open_meteo", "nws_station"}:
-        raise TradingConfigError(
-            "weather.observations_provider must be open_meteo or nws_station"
-        )
+    # Weather provider strings are normalized in parsing. Keep this fail-open so
+    # Streamlit can still boot if a deployed config contains a stale/custom alias.
     if config.weather.observed_past_hours < 1:
         raise TradingConfigError("weather.observed_past_hours must be positive")
     if config.weather.forecast_past_hours < 1:

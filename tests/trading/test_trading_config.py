@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from src.trading.config import TradingConfigError, load_trading_config, parse_trading_config
+from src.trading.config import TradingConfigError, load_trading_config, parse_trading_config, validate_trading_config
 
 
 def test_default_trading_config_is_shadow_and_not_live_auto() -> None:
@@ -99,3 +100,17 @@ def test_unknown_live_weather_provider_falls_back_to_nws() -> None:
 
     assert config.weather.provider == "nws"
     assert config.weather.observations_provider == "nws_station"
+
+
+def test_weather_provider_validation_is_fail_open_for_dashboard_boot() -> None:
+    config = parse_trading_config({})
+    config = replace(
+        config,
+        weather=replace(
+            config.weather,
+            provider="legacy_streamlit_value",
+            observations_provider="legacy_observation_value",
+        ),
+    )
+
+    validate_trading_config(config)
