@@ -57,3 +57,31 @@ def test_invalid_settlement_hours_fail_validation() -> None:
                 }
             }
         )
+
+
+def test_weather_provider_aliases_are_normalized() -> None:
+    config = parse_trading_config(
+        {
+            "weather": {
+                "provider": "NWS Station",
+                "observations_provider": "weather.gov",
+            }
+        }
+    )
+
+    assert config.weather.provider == "nws"
+    assert config.weather.observations_provider == "nws_station"
+
+
+def test_open_meteo_provider_alias_is_normalized() -> None:
+    config = parse_trading_config(
+        {
+            "weather": {
+                "provider": "open-meteo",
+                "observations_provider": "openmeteo",
+            }
+        }
+    )
+
+    assert config.weather.provider == "open_meteo"
+    assert config.weather.observations_provider == "open_meteo"

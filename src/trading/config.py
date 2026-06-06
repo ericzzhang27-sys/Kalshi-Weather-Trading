@@ -564,8 +564,10 @@ def _parse_live_weather_settings(raw: Any) -> LiveWeatherSettings:
     )
     nws_station = _parse_nws_station_settings(data.get("nws_station", {}))
     return LiveWeatherSettings(
-        provider=str(data.get("provider", "open_meteo")).strip(),
-        observations_provider=str(data.get("observations_provider", "nws_station")).strip(),
+        provider=_normalize_weather_provider(str(data.get("provider", "open_meteo"))),
+        observations_provider=_normalize_observations_provider(
+            str(data.get("observations_provider", "nws_station"))
+        ),
         forecast_base_url=str(
             data.get("forecast_base_url", "https://api.open-meteo.com/v1/forecast")
         ).rstrip("/"),
@@ -627,6 +629,42 @@ def _normalize_env(value: str) -> str:
     if normalized in {"demo", "sandbox"}:
         return "demo"
     return normalized
+
+
+def _normalize_weather_provider(value: str) -> str:
+    normalized = (
+        value.strip().lower().replace("-", "_").replace(".", "_").replace(" ", "_")
+    )
+    aliases = {
+        "nws": "nws",
+        "noaa": "nws",
+        "weather_gov": "nws",
+        "api_weather_gov": "nws",
+        "nws_station": "nws",
+        "nws_forecast": "nws",
+        "nws_gridpoint": "nws",
+        "nws_gridpoint_forecast": "nws",
+        "open_meteo": "open_meteo",
+        "openmeteo": "open_meteo",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _normalize_observations_provider(value: str) -> str:
+    normalized = (
+        value.strip().lower().replace("-", "_").replace(".", "_").replace(" ", "_")
+    )
+    aliases = {
+        "nws": "nws_station",
+        "noaa": "nws_station",
+        "weather_gov": "nws_station",
+        "api_weather_gov": "nws_station",
+        "nws_station": "nws_station",
+        "nws_observations": "nws_station",
+        "open_meteo": "open_meteo",
+        "openmeteo": "open_meteo",
+    }
+    return aliases.get(normalized, normalized)
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
