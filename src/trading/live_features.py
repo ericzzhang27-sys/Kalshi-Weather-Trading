@@ -281,6 +281,11 @@ def _feature_source(
     }:
         return "prediction_clock", row.get("prediction_time")
     if feature in {
+        "forecast_current_temp_gap_per_hour_to_peak",
+        "needed_warming_rate_minus_recent_rate",
+    }:
+        return "daily_forecast_and_hourly_observations", row.get("current_temp_source_time")
+    if feature in {
         "current_temp",
         "dew_point",
         "cloud_cover_now",

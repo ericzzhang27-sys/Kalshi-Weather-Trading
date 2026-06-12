@@ -16,12 +16,14 @@ from src.leakage_checks import run_leakage_checks, write_leakage_report  # noqa:
 
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
 OUTPUTS_DIR = REPO_ROOT / "outputs" / "day8_features"
+REPORTS_DIR = REPO_ROOT / "outputs" / "reports"
 
 MODELING_ROWS_OUTPUT = PROCESSED_DIR / "modeling_rows_v1.csv"
 PREVIEW_OUTPUT = OUTPUTS_DIR / "modeling_rows_v1_preview.csv"
 MISSINGNESS_OUTPUT = OUTPUTS_DIR / "feature_missingness_report.csv"
 FEATURE_COLUMNS_OUTPUT = OUTPUTS_DIR / "feature_columns.json"
 LEAKAGE_REPORT_OUTPUT = OUTPUTS_DIR / "leakage_check_report.md"
+TRAINING_DATASET_COVERAGE_OUTPUT = REPORTS_DIR / "training_dataset_coverage.csv"
 
 
 def _range_text(series: pd.Series) -> str:
@@ -42,6 +44,35 @@ def _status_counts(checks: dict[str, object]) -> str:
             if status in counts:
                 counts[status] += 1
     return ", ".join(f"{status}: {count}" for status, count in counts.items())
+
+
+def _write_training_dataset_coverage(df: pd.DataFrame, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    date_range = _range_text(df["target_date"]) if "target_date" in df.columns else "not available"
+    prediction_range = (
+        _range_text(df["prediction_time"]) if "prediction_time" in df.columns else "not available"
+    )
+    row = {
+        "rows": int(len(df)),
+        "target_date_range": date_range,
+        "prediction_time_range": prediction_range,
+        "missing_official_daily_high_f": int(df["official_daily_high_f"].isna().sum())
+        if "official_daily_high_f" in df.columns
+        else "",
+        "missing_actual_high": int(df["actual_high"].isna().sum()) if "actual_high" in df.columns else "",
+        "missing_forecast_high": int(df["forecast_high"].isna().sum()) if "forecast_high" in df.columns else "",
+        "missing_forecast_error": int(df["forecast_error"].isna().sum()) if "forecast_error" in df.columns else "",
+        "missing_nws_current_temp_f": int(df["nws_current_temp_f"].isna().sum())
+        if "nws_current_temp_f" in df.columns
+        else "",
+        "missing_nws_max_temp_so_far_f": int(df["nws_max_temp_so_far_f"].isna().sum())
+        if "nws_max_temp_so_far_f" in df.columns
+        else "",
+        "dropped_critical_rows": int(df.attrs.get("dropped_critical_rows", 0)),
+        "dropped_critical_fraction": float(df.attrs.get("dropped_critical_fraction", 0.0)),
+        "critical_columns": ";".join(str(value) for value in df.attrs.get("critical_columns", [])),
+    }
+    pd.DataFrame([row]).to_csv(output_path, index=False)
 
 
 def _run_basic_assertions(df: pd.DataFrame, feature_columns: list[str]) -> None:
@@ -82,6 +113,7 @@ def _run_basic_assertions(df: pd.DataFrame, feature_columns: list[str]) -> None:
 def main() -> None:
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
     inputs = load_inputs()
     modeling_rows = build_feature_matrix(inputs, missingness_output_path=MISSINGNESS_OUTPUT)
@@ -95,6 +127,7 @@ def main() -> None:
 
     checks = run_leakage_checks(modeling_rows, feature_columns)
     write_leakage_report(checks, LEAKAGE_REPORT_OUTPUT)
+    _write_training_dataset_coverage(modeling_rows, TRAINING_DATASET_COVERAGE_OUTPUT)
 
     _run_basic_assertions(modeling_rows, feature_columns)
 

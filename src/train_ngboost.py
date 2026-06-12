@@ -219,6 +219,7 @@ def run_standard_training(args: argparse.Namespace) -> None:
         validation_sigma,
         distribution=distribution,
         df=validation_details.get("df"),
+        skew=validation_details.get("skew"),
     )
     test_nll = distribution_nll(
         y_test,
@@ -226,6 +227,7 @@ def run_standard_training(args: argparse.Namespace) -> None:
         test_sigma,
         distribution=distribution,
         df=test_details.get("df"),
+        skew=test_details.get("skew"),
     )
     validate_distribution_outputs(
         split_name="validation",
@@ -267,6 +269,7 @@ def run_standard_training(args: argparse.Namespace) -> None:
                 nll=validation_nll,
                 distribution_type=distribution,
                 df=validation_details.get("df"),
+                skew=validation_details.get("skew"),
             ),
             build_prediction_frame(
                 split_name="test",
@@ -276,6 +279,7 @@ def run_standard_training(args: argparse.Namespace) -> None:
                 nll=test_nll,
                 distribution_type=distribution,
                 df=test_details.get("df"),
+                skew=test_details.get("skew"),
             ),
         ],
         ignore_index=True,
@@ -848,9 +852,13 @@ def _evaluate_validation_predictions(
     train_mu = np.asarray(train_details["mu"], dtype=float)
     train_sigma = np.asarray(train_details["sigma"], dtype=float)
     train_df_values = train_details["df"] if train_details.get("df") is not None else None
+    train_skew_values = train_details["skew"] if train_details.get("skew") is not None else None
     val_mu = np.asarray(validation_details["mu"], dtype=float)
     val_sigma = np.asarray(validation_details["sigma"], dtype=float)
     val_df_values = validation_details["df"] if validation_details.get("df") is not None else None
+    val_skew_values = (
+        validation_details["skew"] if validation_details.get("skew") is not None else None
+    )
 
     train_nll = distribution_nll(
         y_train,
@@ -858,6 +866,7 @@ def _evaluate_validation_predictions(
         sigma=train_sigma,
         distribution=distribution,
         df=train_df_values,
+        skew=train_skew_values,
     )
     val_nll = distribution_nll(
         y_validation,
@@ -865,6 +874,7 @@ def _evaluate_validation_predictions(
         sigma=val_sigma,
         distribution=distribution,
         df=val_df_values,
+        skew=val_skew_values,
     )
     if not np.isfinite(train_nll).all() or not np.isfinite(val_nll).all():
         raise ValueError("NLL contains non-finite values")
@@ -876,6 +886,7 @@ def _evaluate_validation_predictions(
         levels=(0.5, 0.8, 0.9),
         dist_type=distribution,
         df=val_df_values,
+        skew=val_skew_values,
     ).set_index("level")
 
     prediction_frame = _build_distribution_prediction_frame(
@@ -900,6 +911,7 @@ def _evaluate_validation_predictions(
         val_sigma,
         dist_type=distribution,
         df=val_df_values,
+        skew=val_skew_values,
     )
     point = _point_prediction_metrics(y_validation, val_mu)
 
@@ -960,6 +972,10 @@ def _build_distribution_prediction_frame(
         frame["df"] = np.asarray(details["df"], dtype=float)
     else:
         frame["df"] = np.nan
+    if details.get("skew") is not None:
+        frame["skew"] = np.asarray(details["skew"], dtype=float)
+    else:
+        frame["skew"] = np.nan
     return frame
 
 
@@ -1810,6 +1826,7 @@ def build_prediction_frame(
     nll: np.ndarray,
     distribution_type: str = "normal",
     df: np.ndarray | pd.Series | None = None,
+    skew: np.ndarray | pd.Series | None = None,
 ) -> pd.DataFrame:
     frame = pd.DataFrame(
         {
@@ -1823,6 +1840,8 @@ def build_prediction_frame(
     )
     if df is not None:
         frame["df"] = np.asarray(df, dtype=float)
+    if skew is not None:
+        frame["skew"] = np.asarray(skew, dtype=float)
 
     metadata = pd.DataFrame(index=split_df.index)
     for column in METADATA_COLUMNS:

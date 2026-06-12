@@ -1,0 +1,2 @@
+source,rows,date_min,date_max,missing_official_daily_high_f,duplicate_date_location_rows,source_file,source_station
+noaa_nws_daily_tmax,1615,2022-01-01,2026-06-03,0,0,C:/Weather Trading/Kalshi-Weather-Trading/data/raw/nws_daily).csv,USW00094728

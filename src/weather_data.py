@@ -11,6 +11,71 @@ import pandas as pd
 CSV_METADATA_ROWS = 3
 TOP_MISSING_COLUMNS = 10
 HIGH_MISSING_THRESHOLD_PERCENT = 25.0
+NYC_LOCATION = "NYC"
+OFFICIAL_DAILY_SOURCE = "noaa_nws_daily_tmax"
+NWS_ASOS_SOURCE = "iem_nws_asos"
+CENTRAL_PARK_STATION = "USW00094728"
+CENTRAL_PARK_NAME_FRAGMENT = "central park"
+NYC_HIGH_MIN_F = -20.0
+NYC_HIGH_MAX_F = 110.0
+ASOS_TEMP_MIN_F = -40.0
+ASOS_TEMP_MAX_F = 130.0
+ASOS_MISSING_VALUES = ["", "M", "NA", "NaN", "nan"]
+ASOS_TRACE_VALUES = {"T", "TRACE", "trace"}
+
+OFFICIAL_DAILY_COLUMNS = [
+    "date",
+    "location",
+    "actual_high",
+    "official_daily_high_f",
+    "actual_source",
+    "source_file",
+    "source_station",
+    "source_station_name",
+]
+
+NWS_HOURLY_COLUMNS = [
+    "timestamp",
+    "date",
+    "location",
+    "station",
+    "nws_current_temp_f",
+    "nws_dew_point_f",
+    "nws_relative_humidity",
+    "nws_wind_dir",
+    "nws_wind_speed_kt",
+    "nws_wind_gust_kt",
+    "nws_altimeter",
+    "nws_mslp",
+    "nws_precip_1h",
+    "nws_skyc1",
+    "nws_skyc2",
+    "nws_skyc3",
+    "nws_metar",
+    "nws_cloud_cover_pct",
+    "source_file",
+    "observation_source",
+    "temperature_2m",
+    "dew_point_2m",
+    "relative_humidity_2m",
+    "wind_direction_10m",
+    "wind_speed_10m",
+    "wind_gusts_10m",
+    "precipitation",
+    "cloud_cover",
+]
+
+SKY_COVER_TO_PERCENT = {
+    "CLR": 0.0,
+    "SKC": 0.0,
+    "NCD": 0.0,
+    "NSC": 0.0,
+    "FEW": 20.0,
+    "SCT": 40.0,
+    "BKN": 75.0,
+    "OVC": 100.0,
+    "VV": 100.0,
+}
 
 
 def _normalise_for_match(value: str) -> str:
@@ -128,10 +193,321 @@ def _find_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
     return None
 
 
+def _iter_csv_paths(path_or_dir: str | Path) -> list[Path]:
+    path = Path(path_or_dir)
+    if not path.exists():
+        raise FileNotFoundError(f"Path does not exist: {path}")
+    if path.is_file():
+        return [path]
+    return sorted(candidate for candidate in path.glob("*.csv") if candidate.is_file())
+
+
+def _read_standard_csv(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path, na_values=ASOS_MISSING_VALUES, keep_default_na=True)
+
+
+def _select_column(df: pd.DataFrame, candidates: Iterable[str]) -> str | None:
+    return _find_column(df, candidates)
+
+
+def _source_file_value(path: Path) -> str:
+    return str(path).replace("\\", "/")
+
+
+def _daily_source_score(df: pd.DataFrame) -> int:
+    score = 0
+    station_col = _select_column(df, ["STATION", "station", "station_id"])
+    name_col = _select_column(df, ["NAME", "name", "station_name"])
+    if station_col is not None:
+        stations = set(df[station_col].dropna().astype(str).str.upper())
+        if CENTRAL_PARK_STATION in stations:
+            score += 1000
+    if name_col is not None:
+        names = " ".join(df[name_col].dropna().astype(str).str.lower().unique())
+        if CENTRAL_PARK_NAME_FRAGMENT in names:
+            score += 500
+        if "ny city" in names or "new york" in names:
+            score += 50
+    score += min(len(df), 100)
+    return score
+
+
+def _candidate_official_daily_files(path_or_dir: str | Path) -> list[tuple[int, Path, pd.DataFrame]]:
+    candidates: list[tuple[int, Path, pd.DataFrame]] = []
+    for path in _iter_csv_paths(path_or_dir):
+        try:
+            df = _read_standard_csv(path)
+        except Exception:
+            continue
+        date_col = _select_column(df, ["DATE", "date"])
+        tmax_col = _select_column(df, ["TMAX", "tmax"])
+        if date_col is None or tmax_col is None:
+            continue
+        candidates.append((_daily_source_score(df), path, df))
+    return sorted(candidates, key=lambda item: (item[0], item[1].name), reverse=True)
+
+
+def _validate_official_tmax_units(values: pd.Series, *, path: Path) -> pd.Series:
+    numeric = pd.to_numeric(values, errors="coerce")
+    non_missing = numeric.dropna()
+    if non_missing.empty:
+        raise ValueError(f"Official daily TMAX has no numeric values: {path}")
+
+    plausible_f = non_missing.between(NYC_HIGH_MIN_F, NYC_HIGH_MAX_F).mean()
+    if plausible_f >= 0.99:
+        return numeric.astype(float)
+
+    tenths_c_to_f = non_missing.div(10.0).mul(9.0 / 5.0).add(32.0)
+    if tenths_c_to_f.between(NYC_HIGH_MIN_F, NYC_HIGH_MAX_F).mean() >= 0.99:
+        raise ValueError(
+            "Official daily TMAX appears to be encoded in tenths Celsius, not Fahrenheit. "
+            f"Refusing to silently convert without explicit metadata: {path}"
+        )
+
+    raise ValueError(
+        "Official daily TMAX values are outside plausible NYC Fahrenheit bounds "
+        f"({NYC_HIGH_MIN_F:g}F to {NYC_HIGH_MAX_F:g}F): {path}"
+    )
+
+
+def _resolve_duplicate_daily_dates(df: pd.DataFrame, *, path: Path) -> pd.DataFrame:
+    if not df.duplicated(subset=["date"]).any():
+        return df
+
+    pieces = []
+    for date_value, group in df.groupby("date", sort=True, dropna=False):
+        unique_highs = group["official_daily_high_f"].dropna().unique()
+        unique_station = group.get("source_station", pd.Series(dtype=object)).dropna().unique()
+        exact_duplicate_count = int(group.drop_duplicates().shape[0])
+        if len(unique_highs) <= 1 and len(unique_station) <= 1:
+            pieces.append(group.iloc[[0]])
+            continue
+        if exact_duplicate_count == 1:
+            pieces.append(group.iloc[[0]])
+            continue
+        raise ValueError(
+            "Official daily high file has unresolved duplicate DATE rows for "
+            f"{pd.Timestamp(date_value).date()}: {path}"
+        )
+    return pd.concat(pieces, ignore_index=True)
+
+
+def load_official_daily_highs(path_or_dir: str | Path) -> pd.DataFrame:
+    """
+    Load official NOAA/NWS daily TMAX rows, preferring Central Park / USW00094728.
+
+    The expected NOAA daily export has DATE and TMAX columns plus optional station
+    identifiers. TMAX is accepted only when the raw values are already plausible
+    NYC Fahrenheit highs; likely tenths-Celsius encodings raise instead of being
+    silently converted.
+    """
+    candidates = _candidate_official_daily_files(path_or_dir)
+    if not candidates:
+        raise FileNotFoundError(
+            f"No official NOAA/NWS daily TMAX CSV found under {Path(path_or_dir)}"
+        )
+
+    _, path, raw = candidates[0]
+    date_col = _select_column(raw, ["DATE", "date"])
+    tmax_col = _select_column(raw, ["TMAX", "tmax"])
+    station_col = _select_column(raw, ["STATION", "station", "station_id"])
+    name_col = _select_column(raw, ["NAME", "name", "station_name"])
+    if date_col is None or tmax_col is None:
+        raise ValueError(f"Official daily high file is missing DATE or TMAX: {path}")
+
+    result = pd.DataFrame()
+    result["date"] = pd.to_datetime(raw[date_col], errors="raise").dt.normalize()
+    result["location"] = NYC_LOCATION
+    result["official_daily_high_f"] = _validate_official_tmax_units(raw[tmax_col], path=path)
+    result["actual_high"] = result["official_daily_high_f"]
+    result["actual_source"] = OFFICIAL_DAILY_SOURCE
+    result["source_file"] = _source_file_value(path)
+    if station_col is not None:
+        result["source_station"] = raw[station_col].astype(str)
+    else:
+        result["source_station"] = ""
+    if name_col is not None:
+        result["source_station_name"] = raw[name_col].astype(str)
+    else:
+        result["source_station_name"] = ""
+
+    if result["date"].isna().any():
+        raise ValueError(f"Official daily high file contains unparseable dates: {path}")
+    missing_highs = int(result["official_daily_high_f"].isna().sum())
+    if missing_highs:
+        raise ValueError(f"Official daily high file has {missing_highs} missing TMAX values: {path}")
+
+    bad_highs = result[
+        ~result["official_daily_high_f"].between(NYC_HIGH_MIN_F, NYC_HIGH_MAX_F)
+    ]
+    if not bad_highs.empty:
+        raise ValueError(
+            f"Official daily high file has {len(bad_highs)} implausible NYC highs: {path}"
+        )
+
+    result = result.drop_duplicates()
+    result = _resolve_duplicate_daily_dates(result, path=path)
+    result = result.sort_values("date").reset_index(drop=True)
+    return result.loc[:, OFFICIAL_DAILY_COLUMNS]
+
+
+def _candidate_nws_hourly_files(path_or_dir: str | Path) -> list[tuple[int, Path, pd.DataFrame]]:
+    candidates: list[tuple[int, Path, pd.DataFrame]] = []
+    for path in _iter_csv_paths(path_or_dir):
+        try:
+            df = _read_standard_csv(path)
+        except Exception:
+            continue
+        station_col = _select_column(df, ["station", "STATION"])
+        valid_col = _select_column(df, ["valid", "timestamp", "time"])
+        temp_col = _select_column(df, ["tmpf", "temp_f", "nws_current_temp_f"])
+        if station_col is None or valid_col is None or temp_col is None:
+            continue
+        stations = set(df[station_col].dropna().astype(str).str.upper().unique())
+        score = 1000 if stations.intersection({"NYC", "KNYC"}) else 0
+        score += min(len(df), 100)
+        candidates.append((score, path, df))
+    return sorted(candidates, key=lambda item: (item[0], item[1].name), reverse=True)
+
+
+def _numeric_asos_column(series: pd.Series) -> pd.Series:
+    cleaned = series.astype("object").where(~series.astype(str).str.strip().isin(ASOS_TRACE_VALUES), "0")
+    return pd.to_numeric(cleaned, errors="coerce")
+
+
+def _sky_cover_percent(series: pd.Series) -> pd.Series:
+    return series.astype(str).str.upper().map(SKY_COVER_TO_PERCENT)
+
+
+def _validate_asos_ranges(df: pd.DataFrame, *, path: Path) -> None:
+    for column in ["nws_current_temp_f", "nws_dew_point_f"]:
+        if column not in df.columns:
+            continue
+        values = pd.to_numeric(df[column], errors="coerce")
+        bad_count = int(((values < ASOS_TEMP_MIN_F) | (values > ASOS_TEMP_MAX_F)).sum())
+        if bad_count:
+            raise ValueError(f"{path} has {bad_count} implausible ASOS temperature values in {column}")
+
+    range_checks = {
+        "nws_relative_humidity": (0.0, 100.0),
+        "nws_wind_dir": (0.0, 360.0),
+        "nws_wind_speed_kt": (0.0, 150.0),
+        "nws_wind_gust_kt": (0.0, 200.0),
+        "nws_precip_1h": (0.0, 20.0),
+    }
+    for column, (lower, upper) in range_checks.items():
+        if column not in df.columns:
+            continue
+        values = pd.to_numeric(df[column], errors="coerce")
+        bad_count = int(((values < lower) | (values > upper)).sum())
+        if bad_count:
+            raise ValueError(f"{path} has {bad_count} implausible ASOS values in {column}")
+
+
+def _standardize_nws_hourly_frame(raw: pd.DataFrame, *, path: Path) -> pd.DataFrame:
+    valid_col = _select_column(raw, ["valid", "timestamp", "time"])
+    station_col = _select_column(raw, ["station", "STATION"])
+    if valid_col is None or station_col is None:
+        raise ValueError(f"NWS hourly file is missing station or valid timestamp: {path}")
+
+    result = pd.DataFrame()
+    timestamp = pd.to_datetime(raw[valid_col], errors="raise")
+    if getattr(timestamp.dt, "tz", None) is not None:
+        timestamp = timestamp.dt.tz_convert("America/New_York").dt.tz_localize(None)
+    result["timestamp"] = timestamp
+    result["date"] = result["timestamp"].dt.normalize()
+    result["location"] = NYC_LOCATION
+    result["station"] = raw[station_col].astype(str)
+
+    column_map = {
+        "tmpf": "nws_current_temp_f",
+        "dwpf": "nws_dew_point_f",
+        "relh": "nws_relative_humidity",
+        "drct": "nws_wind_dir",
+        "sknt": "nws_wind_speed_kt",
+        "gust": "nws_wind_gust_kt",
+        "alti": "nws_altimeter",
+        "mslp": "nws_mslp",
+        "p01i": "nws_precip_1h",
+    }
+    for source, target in column_map.items():
+        source_col = _select_column(raw, [source])
+        if source_col is not None:
+            result[target] = _numeric_asos_column(raw[source_col])
+
+    for source, target in [
+        ("skyc1", "nws_skyc1"),
+        ("skyc2", "nws_skyc2"),
+        ("skyc3", "nws_skyc3"),
+        ("metar", "nws_metar"),
+    ]:
+        source_col = _select_column(raw, [source])
+        if source_col is not None:
+            result[target] = raw[source_col]
+
+    if "nws_skyc1" in result.columns:
+        result["nws_cloud_cover_pct"] = _sky_cover_percent(result["nws_skyc1"])
+
+    result["source_file"] = _source_file_value(path)
+    result["observation_source"] = NWS_ASOS_SOURCE
+
+    alias_pairs = {
+        "nws_current_temp_f": "temperature_2m",
+        "nws_dew_point_f": "dew_point_2m",
+        "nws_relative_humidity": "relative_humidity_2m",
+        "nws_wind_dir": "wind_direction_10m",
+        "nws_wind_speed_kt": "wind_speed_10m",
+        "nws_wind_gust_kt": "wind_gusts_10m",
+        "nws_precip_1h": "precipitation",
+        "nws_cloud_cover_pct": "cloud_cover",
+    }
+    for source, alias in alias_pairs.items():
+        if source in result.columns:
+            result[alias] = result[source]
+
+    _validate_asos_ranges(result, path=path)
+    return result
+
+
+def load_nws_hourly_observations(path_or_dir: str | Path) -> pd.DataFrame:
+    """
+    Load IEM/NWS ASOS hourly and special observations for NYC/KNYC.
+
+    IEM CSV exports used by this project have naive `valid` timestamps already in
+    America/New_York local clock time, as confirmed by the METAR Z timestamps in
+    the raw file. Timezone-aware inputs are converted to America/New_York and then
+    stored as naive local timestamps to match the rest of the pipeline.
+    """
+    candidates = _candidate_nws_hourly_files(path_or_dir)
+    if not candidates:
+        raise FileNotFoundError(f"No IEM/NWS ASOS hourly CSV found under {Path(path_or_dir)}")
+
+    frames = []
+    best_score = candidates[0][0]
+    for score, path, raw in candidates:
+        if score < best_score:
+            continue
+        frames.append(_standardize_nws_hourly_frame(raw, path=path))
+
+    result = pd.concat(frames, ignore_index=True)
+    station_upper = result["station"].astype(str).str.upper()
+    preferred = result[station_upper.isin(["NYC", "KNYC"])].copy()
+    if not preferred.empty:
+        result = preferred
+
+    result = result.drop_duplicates()
+    result = result.sort_values(["station", "timestamp"]).reset_index(drop=True)
+    for column in NWS_HOURLY_COLUMNS:
+        if column not in result.columns:
+            result[column] = np.nan
+    return result.loc[:, NWS_HOURLY_COLUMNS]
+
+
 def identify_actual_high_column(df: pd.DataFrame) -> str | None:
     return _find_column(
         df,
         [
+            "official_daily_high_f",
             "actual_high",
             "actual_daily_high",
             "temperature_2m_max",
@@ -257,7 +633,11 @@ def standardize_daily_weather(df: pd.DataFrame, location: str = "NYC") -> pd.Dat
             "Could not identify actual daily high column. "
             f"Available columns: {list(clean.columns)}"
         )
-    if actual_high_column != "actual_high":
+    if actual_high_column == "official_daily_high_f":
+        clean["actual_high"] = pd.to_numeric(clean[actual_high_column], errors="coerce")
+        if "actual_source" not in clean.columns:
+            clean["actual_source"] = OFFICIAL_DAILY_SOURCE
+    elif actual_high_column != "actual_high":
         clean = clean.rename(columns={actual_high_column: "actual_high"})
 
     clean = _standardize_weather_columns(clean)
@@ -265,6 +645,7 @@ def standardize_daily_weather(df: pd.DataFrame, location: str = "NYC") -> pd.Dat
         clean,
         [
             "actual_high",
+            "official_daily_high_f",
             "temperature_2m_min",
             "temperature_2m_mean",
             "precipitation_sum",
@@ -289,6 +670,11 @@ def standardize_daily_weather(df: pd.DataFrame, location: str = "NYC") -> pd.Dat
             "date",
             "location",
             "actual_high",
+            "official_daily_high_f",
+            "actual_source",
+            "source_file",
+            "source_station",
+            "source_station_name",
             "precipitation_sum",
             "rain_sum",
             "snowfall_sum",

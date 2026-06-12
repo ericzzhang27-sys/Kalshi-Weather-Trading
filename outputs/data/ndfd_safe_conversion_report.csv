@@ -1,0 +1,8 @@
+local_file,status,row_count,elapsed_seconds,error
+data\raw\ndfd_probe\sector_b_variables\YABZ97_KWBN_202306062136,extracted,16,2.562,
+data\raw\ndfd_probe\sector_b_variables\YBBZ97_KWBN_202306062136,extracted,16,1.994,
+data\raw\ndfd_probe\sector_b_variables\YCBZ97_KWBN_202306062136,extracted,16,2.008,
+data\raw\ndfd_probe\sector_b_variables\YDBZ97_KWBN_202306062136,extracted,8,2.394,
+data\raw\ndfd_probe\sector_b_variables\YEBZ97_KWBN_202306062136,extracted,16,1.881,
+data\raw\ndfd_probe\sector_b_variables\YFBZ97_KWBN_202306062136,empty,0,1.955,
+data\raw\ndfd_probe\sector_b_variables\YGBZ97_KWBN_202306062136,extracted,4,2.256,

@@ -345,6 +345,7 @@ def build_raw_interval_coverage(params: pd.DataFrame, dist_type: str) -> pd.Data
             levels=COVERAGE_LEVELS,
             dist_type=dist_type,
             df=split_df["df"] if normalize_distribution_name(dist_type) == "student_t" else None,
+            skew=split_df["skew"] if normalize_distribution_name(dist_type) == "skew_normal" else None,
         )
         frames.append(coverage.drop(columns=["avg_interval_width"]))
     return pd.concat(frames, ignore_index=True)
@@ -390,6 +391,7 @@ def build_alpha_search(
         coverage_levels=COVERAGE_LEVELS,
         dist_type=dist_type,
         df=validation["df"] if normalize_distribution_name(dist_type) == "student_t" else None,
+        skew=validation["skew"] if normalize_distribution_name(dist_type) == "skew_normal" else None,
         coverage_penalty_weight=args.coverage_penalty_weight,
     )
     search = search.rename(columns={"nll": "validation_nll"})
@@ -483,6 +485,11 @@ def recompute_bucket_probabilities(
         if dist == "student_t" and "df" in working.columns
         else None
     )
+    skew_values = (
+        pd.to_numeric(working["skew"], errors="raise").to_numpy(dtype=float)
+        if dist == "skew_normal" and "skew" in working.columns
+        else None
+    )
 
     lower_cdf = np.zeros(len(working), dtype=float)
     lower_mask = lower.notna().to_numpy()
@@ -493,6 +500,7 @@ def recompute_bucket_probabilities(
             sigma=sigma[lower_mask],
             distribution=dist,
             df=df_values[lower_mask] if df_values is not None else None,
+            skew=skew_values[lower_mask] if skew_values is not None else None,
         )
 
     upper_cdf = np.ones(len(working), dtype=float)
@@ -504,6 +512,7 @@ def recompute_bucket_probabilities(
             sigma=sigma[upper_mask],
             distribution=dist,
             df=df_values[upper_mask] if df_values is not None else None,
+            skew=skew_values[upper_mask] if skew_values is not None else None,
         )
 
     probability = np.clip(upper_cdf - lower_cdf, 0.0, 1.0)
@@ -534,6 +543,7 @@ def build_calibration_report(
                 levels=COVERAGE_LEVELS,
                 dist_type=dist_type,
                 df=split_df["df"] if normalize_distribution_name(dist_type) == "student_t" else None,
+                skew=split_df["skew"] if normalize_distribution_name(dist_type) == "skew_normal" else None,
             ).set_index("level")
             row_ids = split_df["row_id"].to_numpy(dtype=int)
             probs, labels = bucket_probability_frame_and_labels(bucket_probs, row_ids=row_ids)
@@ -548,6 +558,7 @@ def build_calibration_report(
                     sigma,
                     dist_type=dist_type,
                     df=split_df["df"] if normalize_distribution_name(dist_type) == "student_t" else None,
+                    skew=split_df["skew"] if normalize_distribution_name(dist_type) == "skew_normal" else None,
                 ),
                 "bucket_brier": float(brier["brier_score"].mean()),
                 "bucket_log_loss": interval_log_loss(probs, labels),
@@ -618,6 +629,7 @@ def build_cdf_reliability_tables(
                     method=method,
                     dist_type=dist_type,
                     df=split_df["df"] if normalize_distribution_name(dist_type) == "student_t" else None,
+                    skew=split_df["skew"] if normalize_distribution_name(dist_type) == "skew_normal" else None,
                 )
             )
     return pd.concat(frames, ignore_index=True)

@@ -10,8 +10,20 @@ import pandas as pd
 from scipy.stats import cauchy as scipy_cauchy
 from scipy.stats import laplace as scipy_laplace
 from scipy.stats import norm as scipy_norm
+from scipy.stats import skewnorm as scipy_skewnorm
 from scipy.stats import t as scipy_t
 from sklearn.tree import DecisionTreeRegressor
+
+try:
+    from ngboost.distns.distn import RegressionDistn
+    from ngboost.scores import LogScore
+except ImportError:  # pragma: no cover - training raises a clearer error later.
+    class RegressionDistn:  # type: ignore[no-redef]
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+    class LogScore:  # type: ignore[no-redef]
+        pass
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -76,10 +88,17 @@ FUTURE_LOOKING_FRAGMENTS = (
 )
 
 MIN_SIGMA_FOR_NLL = 1e-6
+MAX_SKEW_NORMAL_SHAPE = 20.0
+SKEW_NORMAL_SHAPE_EPS = 1e-6
 
 DISTRIBUTION_ALIASES = {
     "normal": "normal",
     "gaussian": "normal",
+    "skew_normal": "skew_normal",
+    "skew-normal": "skew_normal",
+    "skewnormal": "skew_normal",
+    "skew_norm": "skew_normal",
+    "skew-norm": "skew_normal",
     "t": "student_t",
     "student_t": "student_t",
     "student-t": "student_t",
@@ -90,8 +109,92 @@ DISTRIBUTION_ALIASES = {
     "cauchy": "cauchy",
 }
 
-SIGNED_NGBOOST_DISTRIBUTIONS = {"normal", "student_t", "laplace", "cauchy"}
+SIGNED_NGBOOST_DISTRIBUTIONS = {"normal", "skew_normal", "student_t", "laplace", "cauchy"}
 POSITIVE_ONLY_NGBOOST_DISTRIBUTIONS = {"gamma", "lognormal", "exponential", "weibull"}
+
+
+def _raw_to_skew_shape(raw_shape: np.ndarray | float) -> np.ndarray:
+    return MAX_SKEW_NORMAL_SHAPE * np.tanh(np.asarray(raw_shape, dtype=float) / MAX_SKEW_NORMAL_SHAPE)
+
+
+def _skew_shape_to_raw(shape: float) -> float:
+    limit = MAX_SKEW_NORMAL_SHAPE * (1.0 - SKEW_NORMAL_SHAPE_EPS)
+    clipped = float(np.clip(shape, -limit, limit))
+    return float(MAX_SKEW_NORMAL_SHAPE * np.arctanh(clipped / MAX_SKEW_NORMAL_SHAPE))
+
+
+def _skew_shape_derivative(raw_shape: np.ndarray | float) -> np.ndarray:
+    shape = _raw_to_skew_shape(raw_shape)
+    return 1.0 - (shape / MAX_SKEW_NORMAL_SHAPE) ** 2
+
+
+class SkewNormalLogScore(LogScore):
+    """NGBoost log-score gradients for a skew-normal forecast-error distribution."""
+
+    def score(self, Y: np.ndarray) -> np.ndarray:
+        return -self.dist.logpdf(Y)
+
+    def d_score(self, Y: np.ndarray) -> np.ndarray:
+        y = np.asarray(Y, dtype=float)
+        z = (y - self.loc) / self.scale
+        skew_z = self.skew * z
+        log_mills = scipy_norm.logpdf(skew_z) - scipy_norm.logcdf(skew_z)
+        mills = np.exp(np.clip(log_mills, -745.0, 50.0))
+
+        gradients = np.zeros((len(y), 3))
+        gradients[:, 0] = (-z + self.skew * mills) / self.scale
+        gradients[:, 1] = 1.0 - z**2 + self.skew * z * mills
+        gradients[:, 2] = -z * mills * _skew_shape_derivative(self.raw_skew)
+        return gradients
+
+
+class SkewNormal(RegressionDistn):
+    """
+    Skew-normal NGBoost distribution for signed forecast errors.
+
+    Parameters are loc, log(scale), and a bounded raw skew parameter. The public
+    `skew`/`shape`/`a` value is the SciPy skew-normal shape parameter.
+    """
+
+    n_params = 3
+    scores = [SkewNormalLogScore]
+
+    def __init__(self, params: np.ndarray):
+        super().__init__(params)
+        self.loc = params[0]
+        self.scale = np.exp(params[1])
+        self.raw_skew = params[2]
+        self.skew = _raw_to_skew_shape(self.raw_skew)
+        self.shape = self.skew
+        self.a = self.skew
+        self.dist = scipy_skewnorm(a=self.skew, loc=self.loc, scale=self.scale)
+
+    def fit(Y: np.ndarray) -> np.ndarray:
+        shape, loc, scale = scipy_skewnorm.fit(Y)
+        if not np.isfinite(scale) or scale <= 0.0:
+            scale = float(np.std(Y, ddof=1))
+        if not np.isfinite(scale) or scale <= 0.0:
+            scale = 1.0
+        raw_shape = _skew_shape_to_raw(float(shape) if np.isfinite(shape) else 0.0)
+        return np.array([float(loc), np.log(float(scale)), raw_shape])
+
+    def sample(self, m: int) -> np.ndarray:
+        return np.array([self.dist.rvs() for _ in range(m)])
+
+    def __getattr__(self, name: str) -> Any:
+        if name in dir(self.dist):
+            return getattr(self.dist, name)
+        return None
+
+    @property
+    def params(self) -> dict[str, np.ndarray]:
+        return {
+            "loc": self.loc,
+            "scale": self.scale,
+            "skew": self.skew,
+            "shape": self.shape,
+            "a": self.a,
+        }
 
 
 def get_feature_columns(
@@ -103,9 +206,9 @@ def get_feature_columns(
     path = Path(feature_columns_path)
     if path.exists():
         spec = json.loads(path.read_text(encoding="utf-8"))
-        raw_columns = list(spec.get("feature_columns", []))
+        raw_columns = list(spec.get("feature_columns", spec.get("features", [])))
         if not raw_columns:
-            raise ValueError(f"Feature spec at {path} does not contain feature_columns")
+            raise ValueError(f"Feature spec at {path} does not contain feature_columns or features")
     else:
         raw_columns = _infer_numeric_feature_columns(df)
 
@@ -250,6 +353,7 @@ def get_ngboost_distribution_class(distribution: str) -> Any:
 
     mapping = {
         "normal": Normal,
+        "skew_normal": SkewNormal,
         "student_t": T,
         "laplace": Laplace,
         "cauchy": Cauchy,
@@ -266,6 +370,8 @@ def infer_ngboost_distribution_name(model: Any) -> str:
         return "normal"
     if raw_name == "T":
         return "student_t"
+    if raw_name == "SkewNormal":
+        return "skew_normal"
     return normalize_distribution_name(raw_name)
 
 
@@ -284,8 +390,11 @@ def predict_distribution_details(
     loc = _extract_distribution_param(predicted_dist, ("loc", "mu", "mean"))
     scale = _extract_distribution_param(predicted_dist, ("scale", "sigma", "std"))
     df = None
+    skew = None
     if dist_name in {"student_t", "cauchy"}:
         df = _optional_distribution_param(predicted_dist, ("df", "nu"))
+    if dist_name == "skew_normal":
+        skew = _optional_distribution_param(predicted_dist, ("skew", "shape", "a", "alpha"))
 
     loc_array = np.asarray(loc, dtype=float)
     scale_array = np.asarray(scale, dtype=float)
@@ -310,12 +419,29 @@ def predict_distribution_details(
         if not np.isfinite(df_array).all() or (df_array <= 0.0).any():
             raise ValueError("Predicted df must be finite and greater than 0")
 
+    skew_array: np.ndarray | None = None
+    if skew is not None:
+        skew_array = np.asarray(skew, dtype=float)
+        if skew_array.ndim == 0:
+            skew_array = np.full(len(X), float(skew_array), dtype=float)
+        if skew_array.shape[0] != len(X):
+            raise ValueError(
+                "Predicted skew length does not match input rows: "
+                f"skew={skew_array.shape[0]}, rows={len(X)}"
+            )
+        if not np.isfinite(skew_array).all():
+            raise ValueError("Predicted skew must be finite")
+    elif dist_name == "skew_normal":
+        raise ValueError("Skew-normal predictions must expose a skew/shape parameter")
+
     return {
         "distribution_type": dist_name,
         "mu": loc_array,
         "sigma": scale_array,
         "scale": scale_array,
         "df": df_array,
+        "skew": skew_array,
+        "shape": skew_array,
     }
 
 
@@ -351,6 +477,7 @@ def distribution_nll(
     sigma: pd.Series | np.ndarray,
     distribution: str = "normal",
     df: pd.Series | np.ndarray | float | None = None,
+    skew: pd.Series | np.ndarray | float | None = None,
     min_sigma: float = MIN_SIGMA_FOR_NLL,
 ) -> np.ndarray:
     logpdf = distribution_logpdf(
@@ -359,6 +486,7 @@ def distribution_nll(
         sigma=sigma,
         distribution=distribution,
         df=df,
+        skew=skew,
         min_sigma=min_sigma,
     )
     return -logpdf
@@ -370,6 +498,7 @@ def distribution_logpdf(
     sigma: pd.Series | np.ndarray | list[float],
     distribution: str = "normal",
     df: pd.Series | np.ndarray | float | None = None,
+    skew: pd.Series | np.ndarray | float | None = None,
     min_sigma: float = MIN_SIGMA_FOR_NLL,
 ) -> np.ndarray:
     dist_name = normalize_distribution_name(distribution)
@@ -380,9 +509,12 @@ def distribution_logpdf(
         min_sigma=min_sigma,
     )
     df_array = _distribution_df_array(df, len(x_array), dist_name)
+    skew_array = _distribution_skew_array(skew, len(x_array), dist_name)
 
     if dist_name == "normal":
         values = scipy_norm.logpdf(x_array, loc=mu_array, scale=sigma_array)
+    elif dist_name == "skew_normal":
+        values = scipy_skewnorm.logpdf(x_array, a=skew_array, loc=mu_array, scale=sigma_array)
     elif dist_name == "student_t":
         values = scipy_t.logpdf(x_array, df=df_array, loc=mu_array, scale=sigma_array)
     elif dist_name == "laplace":
@@ -404,13 +536,17 @@ def distribution_cdf(
     sigma: pd.Series | np.ndarray | list[float] | float,
     distribution: str = "normal",
     df: pd.Series | np.ndarray | list[float] | float | None = None,
+    skew: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> np.ndarray:
     dist_name = normalize_distribution_name(distribution)
     x_array, mu_array, sigma_array = _broadcast_distribution_arrays(x, mu, sigma)
     df_array = _distribution_df_array(df, len(x_array), dist_name)
+    skew_array = _distribution_skew_array(skew, len(x_array), dist_name)
 
     if dist_name == "normal":
         values = scipy_norm.cdf(x_array, loc=mu_array, scale=sigma_array)
+    elif dist_name == "skew_normal":
+        values = scipy_skewnorm.cdf(x_array, a=skew_array, loc=mu_array, scale=sigma_array)
     elif dist_name == "student_t":
         values = scipy_t.cdf(x_array, df=df_array, loc=mu_array, scale=sigma_array)
     elif dist_name == "laplace":
@@ -434,15 +570,19 @@ def distribution_ppf(
     sigma: pd.Series | np.ndarray | list[float] | float,
     distribution: str = "normal",
     df: pd.Series | np.ndarray | list[float] | float | None = None,
+    skew: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> np.ndarray:
     dist_name = normalize_distribution_name(distribution)
     q_array, mu_array, sigma_array = _broadcast_distribution_arrays(q, mu, sigma)
     if ((q_array <= 0.0) | (q_array >= 1.0)).any():
         raise ValueError("Quantiles must be strictly between 0 and 1")
     df_array = _distribution_df_array(df, len(q_array), dist_name)
+    skew_array = _distribution_skew_array(skew, len(q_array), dist_name)
 
     if dist_name == "normal":
         values = scipy_norm.ppf(q_array, loc=mu_array, scale=sigma_array)
+    elif dist_name == "skew_normal":
+        values = scipy_skewnorm.ppf(q_array, a=skew_array, loc=mu_array, scale=sigma_array)
     elif dist_name == "student_t":
         values = scipy_t.ppf(q_array, df=df_array, loc=mu_array, scale=sigma_array)
     elif dist_name == "laplace":
@@ -462,15 +602,20 @@ def distribution_std(
     sigma: pd.Series | np.ndarray | list[float],
     distribution: str = "normal",
     df: pd.Series | np.ndarray | list[float] | float | None = None,
+    skew: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> np.ndarray:
     dist_name = normalize_distribution_name(distribution)
     scale = _as_finite_1d_array(sigma, "sigma")
     if (scale <= 0.0).any():
         raise ValueError("sigma/scale must be greater than 0")
     df_array = _distribution_df_array(df, len(scale), dist_name)
+    skew_array = _distribution_skew_array(skew, len(scale), dist_name)
 
     if dist_name == "normal":
         return scale
+    if dist_name == "skew_normal":
+        delta = skew_array / np.sqrt(1.0 + skew_array**2)
+        return scale * np.sqrt(1.0 - (2.0 * delta**2 / math.pi))
     if dist_name == "student_t":
         std = np.full_like(scale, np.nan, dtype=float)
         finite_variance = df_array > 2.0
@@ -612,6 +757,28 @@ def _distribution_df_array(
     if dist_name == "cauchy":
         return np.ones(length, dtype=float)
     return None
+
+
+def _distribution_skew_array(
+    skew: pd.Series | np.ndarray | list[float] | float | None,
+    length: int,
+    distribution: str,
+) -> np.ndarray | None:
+    dist_name = normalize_distribution_name(distribution)
+    if dist_name != "skew_normal":
+        return None
+    if skew is None:
+        raise ValueError("Skew-normal distribution requires skew/shape values")
+    skew_array = np.asarray(skew, dtype=float)
+    if skew_array.ndim == 0:
+        skew_array = np.full(length, float(skew_array), dtype=float)
+    else:
+        skew_array = np.ravel(skew_array).astype(float)
+    if len(skew_array) != length:
+        raise ValueError(f"skew length must be {length}, got {len(skew_array)}")
+    if not np.isfinite(skew_array).all():
+        raise ValueError("skew must be finite")
+    return skew_array
 
 
 def _as_finite_1d_array(values: pd.Series | np.ndarray | list[float], name: str) -> np.ndarray:

@@ -93,6 +93,7 @@ BUCKET_OUTPUT_COLUMNS = [
     "sigma",
     "distribution_type",
     "df",
+    "skew",
     "probability",
 ]
 
@@ -234,6 +235,7 @@ def cdf_from_params(
     sigma: float,
     dist_type: str = "normal",
     df: float | None = None,
+    skew: float | None = None,
 ) -> float:
     """
     Evaluate a forecast-error CDF from distribution parameters.
@@ -262,6 +264,7 @@ def cdf_from_params(
             sigma=sigma_value,
             distribution=dist,
             df=df,
+            skew=skew,
         )[0]
     )
 
@@ -279,6 +282,7 @@ def interval_probability_from_cdf(
     sigma: float,
     dist_type: str = "normal",
     df: float | None = None,
+    skew: float | None = None,
 ) -> float:
     """
     Compute P(lower < error <= upper) as F(upper) - F(lower).
@@ -300,12 +304,26 @@ def interval_probability_from_cdf(
     lower_cdf = (
         0.0
         if lower_value is None or _is_negative_infinity(lower_value)
-        else cdf_from_params(lower_value, mu=mu, sigma=sigma, dist_type=dist_type, df=df)
+        else cdf_from_params(
+            lower_value,
+            mu=mu,
+            sigma=sigma,
+            dist_type=dist_type,
+            df=df,
+            skew=skew,
+        )
     )
     upper_cdf = (
         1.0
         if upper_value is None or _is_positive_infinity(upper_value)
-        else cdf_from_params(upper_value, mu=mu, sigma=sigma, dist_type=dist_type, df=df)
+        else cdf_from_params(
+            upper_value,
+            mu=mu,
+            sigma=sigma,
+            dist_type=dist_type,
+            df=df,
+            skew=skew,
+        )
     )
     return _clean_probability(upper_cdf - lower_cdf)
 
@@ -506,6 +524,7 @@ def price_buckets_for_row(
     mu, sigma = _validate_distribution_params(row_values["mu"], row_values["sigma"])
     dist = _validate_dist_type(dist_type)
     df_value = _row_degrees_of_freedom(row_values, dist)
+    skew_value = _row_skew(row_values, dist)
     if buckets is None:
         buckets = make_kalshi_buckets_around_forecast(
             forecast_high=forecast_high,
@@ -527,6 +546,7 @@ def price_buckets_for_row(
             sigma=sigma,
             dist_type=dist,
             df=df_value,
+            skew=skew_value,
         )
         record = {
             **metadata,
@@ -540,6 +560,7 @@ def price_buckets_for_row(
             "sigma": sigma,
             "distribution_type": dist,
             "df": df_value,
+            "skew": skew_value,
             "probability": probability,
         }
         records.append(record)
@@ -577,6 +598,13 @@ def _validate_prediction_params_frame(
         df_values = working["df"].to_numpy(dtype=float)
         if not np.isfinite(df_values).all() or (df_values <= 0.0).any():
             raise ValueError("df must be finite and greater than 0 for Student-t pricing")
+    if normalize_distribution_name(dist_type) == "skew_normal":
+        if "skew" not in working.columns:
+            raise ValueError("Skew-normal bucket pricing requires a skew column")
+        working["skew"] = pd.to_numeric(working["skew"], errors="coerce")
+        skew_values = working["skew"].to_numpy(dtype=float)
+        if not np.isfinite(skew_values).all():
+            raise ValueError("skew must be finite for Skew-normal pricing")
 
     for column in ("actual_high", "official_high", "forecast_error", "forecast_horizon_hours", "nll"):
         if column in working.columns:
@@ -596,6 +624,18 @@ def _row_degrees_of_freedom(row_values: dict[str, Any], dist_type: str) -> float
     return value
 
 
+def _row_skew(row_values: dict[str, Any], dist_type: str) -> float | None:
+    if dist_type != "skew_normal":
+        return None
+    for column in ("skew", "shape", "a"):
+        if column in row_values:
+            value = float(row_values[column])
+            if not math.isfinite(value):
+                raise ValueError(f"skew must be finite, got {row_values[column]!r}")
+            return value
+    raise ValueError("Skew-normal row pricing requires skew")
+
+
 def _probabilities_for_bucket_arrays(
     lower_error: np.ndarray | None,
     upper_error: np.ndarray | None,
@@ -603,17 +643,18 @@ def _probabilities_for_bucket_arrays(
     sigma: np.ndarray,
     dist_type: str,
     df: np.ndarray | None = None,
+    skew: np.ndarray | None = None,
 ) -> np.ndarray:
     dist = _validate_dist_type(dist_type)
     lower_cdf = (
         np.zeros_like(mu, dtype=float)
         if lower_error is None
-        else distribution_cdf(lower_error, mu=mu, sigma=sigma, distribution=dist, df=df)
+        else distribution_cdf(lower_error, mu=mu, sigma=sigma, distribution=dist, df=df, skew=skew)
     )
     upper_cdf = (
         np.ones_like(mu, dtype=float)
         if upper_error is None
-        else distribution_cdf(upper_error, mu=mu, sigma=sigma, distribution=dist, df=df)
+        else distribution_cdf(upper_error, mu=mu, sigma=sigma, distribution=dist, df=df, skew=skew)
     )
     probabilities = np.asarray(upper_cdf - lower_cdf, dtype=float)
     if not np.isfinite(probabilities).all():
@@ -668,6 +709,7 @@ def price_buckets_for_dataframe(
     mu = working["mu"].to_numpy(dtype=float)
     sigma = working["sigma"].to_numpy(dtype=float)
     df_values = working["df"].to_numpy(dtype=float) if dist == "student_t" else None
+    skew_values = working["skew"].to_numpy(dtype=float) if dist == "skew_normal" else None
     metadata_columns = [
         column for column in PREDICTION_METADATA_COLUMNS if column in working.columns
     ]
@@ -685,6 +727,7 @@ def price_buckets_for_dataframe(
             sigma=sigma,
             dist_type=dist,
             df=df_values,
+            skew=skew_values,
         )
 
         frame = working[base_columns].copy()
@@ -698,6 +741,7 @@ def price_buckets_for_dataframe(
         frame["sigma"] = sigma
         frame["distribution_type"] = dist
         frame["df"] = df_values if df_values is not None else np.nan
+        frame["skew"] = skew_values if skew_values is not None else np.nan
         frame["probability"] = probabilities
         frames.append(frame)
 

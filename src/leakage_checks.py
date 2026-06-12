@@ -171,18 +171,33 @@ def run_leakage_checks(df: pd.DataFrame, feature_columns: list[str]) -> dict[str
         actual_high = pd.to_numeric(df["actual_high"], errors="coerce")
         comparable = max_so_far.notna() & actual_high.notna()
         violations = comparable & (max_so_far > actual_high + 0.5)
+        uses_asos = (
+            "observed_temperature_source" in df.columns
+            and set(df["observed_temperature_source"].dropna().astype(str).unique()) == {"iem_nws_asos"}
+        )
+        status = "PASS"
+        if violations.any():
+            status = "WARN" if uses_asos else "FAIL"
         checks.append(
             _check_item(
                 "Max-so-far sanity check",
-                "FAIL" if violations.any() else "PASS",
+                status,
                 affected_rows=int(violations.sum()),
                 affected_columns=["max_temp_so_far", "actual_high"] if violations.any() else [],
                 explanation=(
-                    "max_temp_so_far exceeds actual_high beyond tolerance. Possible causes: "
-                    "unit mismatch, wrong actual_high column, timezone/date alignment problem, "
-                    "or max_temp_so_far accidentally using future data."
-                    if violations.any()
-                    else "max_temp_so_far never exceeds actual_high beyond the 0.5 degree tolerance."
+                    "max_temp_so_far exceeds official daily actual_high for some rows. "
+                    "Because observed_temperature_source is IEM/NWS ASOS, this is treated "
+                    "as a source-disagreement warning: hourly/special ASOS reports can differ "
+                    "from the official daily TMAX climate product. Future timestamp checks still "
+                    "guard leakage."
+                    if violations.any() and uses_asos
+                    else (
+                        "max_temp_so_far exceeds actual_high beyond tolerance. Possible causes: "
+                        "unit mismatch, wrong actual_high column, timezone/date alignment problem, "
+                        "or max_temp_so_far accidentally using future data."
+                        if violations.any()
+                        else "max_temp_so_far never exceeds actual_high beyond the 0.5 degree tolerance."
+                    )
                 ),
             )
         )

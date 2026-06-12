@@ -1,0 +1,5 @@
+field,source_used,priority_rank,decision,reason
+official_daily_high,noaa_nws_daily_tmax,1,used,NOAA/NWS daily TMAX for Central Park is the official Kalshi-style settlement label.
+observed_temperature,iem_nws_asos,1,used,IEM/NWS ASOS observations provide timestamped station observations including special observations.
+forecast_high,nws_ndfd_historical_forecast,1,used,"Historical NWS/NDFD MaxT forecast archive is used as forecast_high where an issue is available as of the prediction time: 38,424 prediction-time rows use NDFD over 2022-01-01 to 2026-05-20; 0 rows use non-NDFD fallback."
+openmeteo_daily_historical_max,daily_raw_nyc_openmeteo.csv,rejected_for_label,not_used_as_label,"Open-Meteo historical daily max is retained only for comparison, not as actual_high."

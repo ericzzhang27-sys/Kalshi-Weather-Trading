@@ -1,11 +1,38 @@
 data:
   modeling_table_path: data/processed/modeling_rows_v1.csv
-  feature_columns_path: outputs/day8_features/feature_columns.json
+  feature_columns_path: outputs/final_feature_list.json
   feature_list_path: outputs/final_feature_list.json
+
+data_sources:
+  official_daily_high:
+    priority:
+      - noaa_nws_daily_tmax_csv
+      - existing_official_daily_source
+    rejected:
+      - open_meteo_historical_daily_max
+  observed_temperature:
+    priority:
+      - iem_nws_asos_hourly_csv
+      - existing_station_observation_source
+      - open_meteo_explicit_emergency_fallback
+    current_reason: >
+      IEM/NWS ASOS station observations are the normal feature source. Open-Meteo
+      can be used only as an explicit live-display fallback, not for rebuilding
+      canonical training features when NWS station observations are available.
+  forecast_high:
+    priority:
+      - ndfd_nws_forecast_archive
+    rejected:
+      - open_meteo_historical_forecast
+    current_reason: >
+      The historical NWS/NDFD MaxT archive is the canonical forecast_high source
+      for training and evaluation rebuilds. Rebuilds require timestamp-safe NDFD
+      coverage as of prediction_time and do not fall back to Open-Meteo forecast
+      history.
 
 target_column: forecast_error
 date_column: date
-features_version: day18_pruned_from_restored_39
+features_version: official_migration_current36
 
 splits:
   strategy: chronological
@@ -13,36 +40,41 @@ splits:
   test_start: "2025-01-01"
 
 ngboost:
-  distribution: Laplace
+  distribution: Normal
   natural_gradient: true
   random_state: 42
 
   # Default production-style training path used by `python -m src.train_ngboost`.
-  # Chosen from outputs/ngboost_current36_distribution_scale_grid.csv after
-  # reviewing test diagnostics for market log loss and continuous NLL. Laplace
-  # is the stronger tail/log-loss candidate; Normal remains slightly better on
-  # market-bucket Brier.
+  # Chosen after the official-data migration from validation probability
+  # metrics on the frozen current36 feature contract. Normal was selected over
+  # Laplace because it led validation NLL, interval log loss, bucket Brier, and
+  # 90% coverage error without using the held-out test split for selection.
   standard_training:
-    selected_candidate: laplace_current36_sigma_x130
-    distribution: Laplace
-    sigma_scale: 1.3
-    n_estimators: 120
-    learning_rate: 0.05
-    max_depth: 2
+    selected_candidate: official_migration_depth3_subsample_15
+    distribution: Normal
+    sigma_scale: 1.0
+    n_estimators: 500
+    learning_rate: 0.01
+    max_depth: 3
     min_samples_leaf: 50
-    minibatch_frac: 1.0
+    minibatch_frac: 0.8
     natural_gradient: true
-    random_state: 11
-    early_stopping_rounds: 20
+    random_state: 42
+    early_stopping_rounds: 5
     validation_metrics:
-      nll: 1.193115
-      market_mean_bucket_brier: 0.079106
-      market_log_loss: 0.926330
+      nll: 1.755863
+      interval_log_loss: 1.089209
+      mean_bucket_brier: 0.120448
+      coverage_80: 0.853621
+      coverage_90: 0.924845
+      calibration_error: 0.023351
     test_diagnostics:
-      nll: 1.401027
-      market_mean_bucket_brier: 0.085499
-      market_log_loss: 0.993487
-    comparison_file: outputs/ngboost_current36_distribution_scale_grid.csv
+      nll: 1.687318
+      interval_log_loss: 1.068653
+      mean_bucket_brier: 0.117201
+      coverage_80: 0.883635
+      coverage_90: 0.941516
+    comparison_file: outputs/ngboost_hyperparameter_search.csv
 
   tuning:
     enabled: true
@@ -58,51 +90,23 @@ ngboost:
       - val_calibration_error
 
     grid:
-      - name: v1_reference_or_near_reference
-        n_estimators: 300
-        learning_rate: 0.03
-        max_depth: 2
-        min_samples_leaf: 20
-        minibatch_frac: 1.0
-
-      - name: more_trees_lower_lr
-        n_estimators: 500
-        learning_rate: 0.02
-        max_depth: 2
-        min_samples_leaf: 20
-        minibatch_frac: 1.0
-
-      - name: many_trees_low_lr
-        n_estimators: 700
-        learning_rate: 0.01
-        max_depth: 2
-        min_samples_leaf: 20
-        minibatch_frac: 1.0
-
-      - name: slightly_deeper
-        n_estimators: 500
-        learning_rate: 0.02
-        max_depth: 3
-        min_samples_leaf: 20
-        minibatch_frac: 1.0
-
-      - name: deeper_more_regularized
-        n_estimators: 700
-        learning_rate: 0.01
-        max_depth: 3
-        min_samples_leaf: 30
-        minibatch_frac: 1.0
-
-      - name: shallow_large_leaf
-        n_estimators: 500
-        learning_rate: 0.02
+      - name: official_migration_reference_10
+        n_estimators: 10
+        learning_rate: 0.05
         max_depth: 2
         min_samples_leaf: 50
         minibatch_frac: 1.0
 
-      - name: shallow_subsampled
-        n_estimators: 500
-        learning_rate: 0.02
+      - name: official_migration_leaf20_15
+        n_estimators: 15
+        learning_rate: 0.04
         max_depth: 2
+        min_samples_leaf: 20
+        minibatch_frac: 1.0
+
+      - name: official_migration_depth3_subsample_15
+        n_estimators: 15
+        learning_rate: 0.04
+        max_depth: 3
         min_samples_leaf: 50
         minibatch_frac: 0.8

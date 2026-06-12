@@ -5,6 +5,7 @@ from math import isclose
 import pandas as pd
 import pytest
 from scipy.stats import norm
+from scipy.stats import skewnorm
 from scipy.stats import t as student_t
 
 from src.bucket_schema import TemperatureBucket, make_integer_temperature_buckets
@@ -48,6 +49,31 @@ def test_student_t_cdf_interval_probability_matches_scipy() -> None:
     expected = student_t.cdf(upper, df=df, loc=mu, scale=sigma) - student_t.cdf(
         lower,
         df=df,
+        loc=mu,
+        scale=sigma,
+    )
+
+    assert isclose(probability, expected, rel_tol=0.0, abs_tol=1e-12)
+
+
+def test_skew_normal_cdf_interval_probability_matches_scipy() -> None:
+    lower = -1.25
+    upper = 2.5
+    mu = 0.4
+    sigma = 1.7
+    skew = 4.0
+
+    probability = interval_probability_from_cdf(
+        lower,
+        upper,
+        mu=mu,
+        sigma=sigma,
+        dist_type="skew_normal",
+        skew=skew,
+    )
+    expected = skewnorm.cdf(upper, a=skew, loc=mu, scale=sigma) - skewnorm.cdf(
+        lower,
+        a=skew,
         loc=mu,
         scale=sigma,
     )
@@ -173,3 +199,27 @@ def test_dataframe_default_prices_six_kalshi_buckets_per_row() -> None:
     assert priced.loc[2, "error_lower"] == -1.5
     assert priced.loc[2, "error_upper"] == 0.5
     assert validate_bucket_probabilities(priced)["validation_passed"] is True
+
+
+def test_skew_normal_bucket_pricing_requires_and_preserves_skew() -> None:
+    buckets = make_integer_temperature_buckets(80, 83)
+    pred_df = pd.DataFrame(
+        {
+            "row_id": [10],
+            "date": ["2025-07-01"],
+            "split": ["validation"],
+            "forecast_high": [82.0],
+            "actual_high": [83.0],
+            "forecast_error": [1.0],
+            "mu": [0.25],
+            "sigma": [1.3],
+            "skew": [3.0],
+        }
+    )
+
+    priced = price_buckets_for_dataframe(pred_df, buckets, dist_type="skew_normal")
+
+    assert len(priced) == len(buckets)
+    assert set(priced["distribution_type"]) == {"skew_normal"}
+    assert priced["skew"].eq(3.0).all()
+    assert validate_bucket_probabilities(priced, tolerance=1e-12)["validation_passed"] is True

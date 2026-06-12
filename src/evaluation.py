@@ -24,6 +24,7 @@ def validate_distribution_params(
     sigma_col: str = "sigma",
     dist_type: str = "normal",
     df_col: str = "df",
+    skew_col: str = "skew",
 ) -> None:
     if not isinstance(df, pd.DataFrame):
         raise TypeError("df must be a pandas DataFrame")
@@ -58,6 +59,14 @@ def validate_distribution_params(
         df_array = df_values.to_numpy(dtype=float)
         if not np.isfinite(df_array).all() or (df_array <= 0.0).any():
             raise ValueError(f"{df_col!r} must be finite and greater than 0")
+    if dist == "skew_normal":
+        if skew_col not in df.columns:
+            raise ValueError("Skew-normal distribution parameters require a skew column")
+        skew_values = pd.to_numeric(df[skew_col], errors="coerce")
+        if skew_values.isna().any():
+            raise ValueError(f"{skew_col!r} contains missing or non-numeric values")
+        if not np.isfinite(skew_values.to_numpy(dtype=float)).all():
+            raise ValueError(f"{skew_col!r} must be finite")
 
 
 def negative_log_likelihood(
@@ -66,6 +75,7 @@ def negative_log_likelihood(
     sigma: pd.Series | np.ndarray | list[float],
     dist_type: str = "normal",
     df: pd.Series | np.ndarray | list[float] | float | None = None,
+    skew: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> float:
     y, mu_array, sigma_array = _validate_distribution_arrays(y_true, mu, sigma)
 
@@ -75,6 +85,7 @@ def negative_log_likelihood(
         sigma=sigma_array,
         distribution=dist_type,
         df=df,
+        skew=skew,
     )
     if not np.isfinite(logpdf).all():
         raise ValueError("Distribution logpdf produced non-finite values")
@@ -91,6 +102,7 @@ def prediction_interval_coverage(
     levels: Iterable[float] = (0.5, 0.8, 0.9),
     dist_type: str = "normal",
     df: pd.Series | np.ndarray | list[float] | float | None = None,
+    skew: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> pd.DataFrame:
     y, mu_array, sigma_array = _validate_distribution_arrays(y_true, mu, sigma)
     parsed_levels = _validate_interval_levels(levels)
@@ -105,6 +117,7 @@ def prediction_interval_coverage(
             sigma=sigma_array,
             distribution=dist_type,
             df=df,
+            skew=skew,
         )
         upper = distribution_ppf(
             np.full(len(y), upper_q, dtype=float),
@@ -112,6 +125,7 @@ def prediction_interval_coverage(
             sigma=sigma_array,
             distribution=dist_type,
             df=df,
+            skew=skew,
         )
         if not np.isfinite(lower).all() or not np.isfinite(upper).all():
             raise ValueError(f"Prediction interval bounds are non-finite for level={level:g}")
@@ -149,6 +163,7 @@ def interval_coverage_report(
     levels: Iterable[float] = (0.5, 0.8, 0.9, 0.95),
     dist_type: str = "normal",
     df: pd.Series | np.ndarray | list[float] | float | None = None,
+    skew: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> pd.DataFrame:
     coverage = prediction_interval_coverage(
         y_true,
@@ -157,6 +172,7 @@ def interval_coverage_report(
         levels=levels,
         dist_type=dist_type,
         df=df,
+        skew=skew,
     )
     result = coverage.rename(
         columns={
@@ -188,6 +204,7 @@ def grouped_interval_coverage_report(
     sigma_col: str = "sigma",
     dist_type: str = "normal",
     df_col: str = "df",
+    skew_col: str = "skew",
     levels: Iterable[float] = (0.5, 0.8, 0.9),
     min_group_n: int = 30,
 ) -> pd.DataFrame:
@@ -211,6 +228,7 @@ def grouped_interval_coverage_report(
             levels=parsed_levels,
             dist_type=dist,
             df=group_df[df_col] if dist == "student_t" and df_col in group_df.columns else None,
+            skew=group_df[skew_col] if dist == "skew_normal" and skew_col in group_df.columns else None,
         )
         residual = (
             pd.to_numeric(group_df[y_col], errors="raise")
@@ -320,6 +338,7 @@ def compute_pit_values(
     sigma: pd.Series | np.ndarray | list[float],
     dist_type: str = "normal",
     df: pd.Series | np.ndarray | list[float] | float | None = None,
+    skew: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> pd.Series:
     y, mu_array, sigma_array = _validate_distribution_arrays(y_true, mu, sigma)
     pit = distribution_cdf(
@@ -328,6 +347,7 @@ def compute_pit_values(
         sigma=sigma_array,
         distribution=dist_type,
         df=df,
+        skew=skew,
     )
     if not np.isfinite(pit).all():
         raise ValueError("PIT values contain non-finite values")
@@ -342,9 +362,10 @@ def standardized_residuals(
     sigma: pd.Series | np.ndarray | list[float],
     dist_type: str = "normal",
     df: pd.Series | np.ndarray | list[float] | float | None = None,
+    skew: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> pd.Series:
     y, mu_array, sigma_array = _validate_distribution_arrays(y_true, mu, sigma)
-    denominator = distribution_std(sigma_array, distribution=dist_type, df=df)
+    denominator = distribution_std(sigma_array, distribution=dist_type, df=df, skew=skew)
     denominator = np.where(np.isfinite(denominator) & (denominator > 0.0), denominator, sigma_array)
     z = (y - mu_array) / denominator
     if not np.isfinite(z).all():
@@ -387,6 +408,7 @@ def coverage_by_group(
     sigma_col: str = "sigma",
     dist_type: str = "normal",
     df_col: str = "df",
+    skew_col: str = "skew",
     level: float = 0.8,
     min_count: int = 30,
 ) -> pd.DataFrame:
@@ -409,6 +431,7 @@ def coverage_by_group(
             levels=(level,),
             dist_type=dist_type,
             df=group_df[df_col] if normalize_distribution_name(dist_type) == "student_t" else None,
+            skew=group_df[skew_col] if normalize_distribution_name(dist_type) == "skew_normal" else None,
         ).iloc[0]
         rows.append(
             {

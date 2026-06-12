@@ -1,5 +1,5 @@
 {
-  "version": "day18_pruned_from_restored_39",
+  "version": "official_migration_current36",
   "target": "forecast_error",
   "model_type": "NGBoost",
   "selection_data": "chronological_validation_only",
@@ -42,46 +42,6 @@
     "near_boundary_duration_so_far",
     "minutes_until_typical_peak"
   ],
-  "kept_feature_groups": [
-    "time_season_partial",
-    "observed_temperature_path",
-    "forecast_relative_partial",
-    "humidity_dew_point",
-    "cloud_precipitation",
-    "wind",
-    "recent_temperature_changes"
-  ],
-  "removed_features": {
-    "forecast_high": "Leave-one-feature-out validation ablation improved NLL when removed; forecast_high remains available as metadata for bucket pricing.",
-    "day_of_year_cos": "Leave-one-feature-out validation ablation improved NLL when removed.",
-    "temp_range_so_far": "Leave-one-feature-out validation ablation improved NLL when removed."
-  },
-  "selection_rule": "Started from the restored 39-feature Day 16/17 list. Removed only features whose individual removal improved chronological validation NLL by at least 0.002, then verified the combined 36-feature candidate against restored 39, remove_time_season, and aggressive neutral-feature removal candidates.",
-  "ablation_outputs": {
-    "single_feature_ablation": "outputs/ngboost_single_feature_ablation.csv",
-    "candidate_comparison": "outputs/ngboost_pruned_candidate_comparison.csv"
-  },
-  "reference_metrics": {
-    "restored_full_39": {
-      "feature_count": 39,
-      "validation_nll": 1.3240006497536272,
-      "test_nll": 1.685493585004031
-    },
-    "pruned_36_candidate": {
-      "feature_count": 36,
-      "validation_nll": 1.2863452921445867,
-      "test_nll": 1.596138121402796
-    },
-    "remove_time_season_group_31": {
-      "feature_count": 31,
-      "validation_nll": 1.2889658400993732,
-      "test_nll": 1.6901947534248397
-    },
-    "keep_only_clear_signal_11": {
-      "feature_count": 11,
-      "validation_nll": 1.424498441717643,
-      "test_nll": 1.833483798873884
-    }
-  },
-  "notes": "Aggressive removal of every near-neutral single-feature ablation degraded validation/test NLL, so the final list uses the conservative 36-feature candidate."
+  "source": "NWS/NDFD current36 production feature contract",
+  "notes": "Frozen production feature contract after the official NOAA/NWS TMAX, IEM/NWS ASOS, and NDFD forecast migration. Forecast-relative hourly feature columns are reproduced from the timestamp-safe NDFD daily-high forecast because the current NDFD archive provides maxt forecasts rather than hourly forecast temperatures. Canonical observed-weather features are sourced from ASOS when available; duplicate nws_* audit aliases remain in modeling rows but are not required model inputs."
 }

@@ -65,6 +65,39 @@ REFINEMENT_HYPERPARAMS = [
         "min_samples_leaf": 20,
     },
     {
+        "name": "production_500_lr001_depth3_leaf50_sub08",
+        **BASE_HYPERPARAMS,
+        "n_estimators": 500,
+        "learning_rate": 0.01,
+        "max_depth": 3,
+        "min_samples_leaf": 50,
+        "minibatch_frac": 0.8,
+        "random_state": 42,
+        "early_stopping_rounds": 5,
+    },
+    {
+        "name": "production_300_lr001_depth3_leaf50_sub08",
+        **BASE_HYPERPARAMS,
+        "n_estimators": 300,
+        "learning_rate": 0.01,
+        "max_depth": 3,
+        "min_samples_leaf": 50,
+        "minibatch_frac": 0.8,
+        "random_state": 42,
+        "early_stopping_rounds": 10,
+    },
+    {
+        "name": "depth3_300_lr002_leaf50_sub08",
+        **BASE_HYPERPARAMS,
+        "n_estimators": 300,
+        "learning_rate": 0.02,
+        "max_depth": 3,
+        "min_samples_leaf": 50,
+        "minibatch_frac": 0.8,
+        "random_state": 42,
+        "early_stopping_rounds": 10,
+    },
+    {
         "name": "medium_300_lr003_leaf50",
         **BASE_HYPERPARAMS,
         "n_estimators": 300,
@@ -78,7 +111,38 @@ REFINEMENT_HYPERPARAMS = [
     },
 ]
 
-SCALE_FACTORS = [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3]
+SCALE_FACTORS = [
+    0.60,
+    0.65,
+    0.70,
+    0.75,
+    0.80,
+    0.85,
+    0.90,
+    0.95,
+    1.00,
+    1.05,
+    1.10,
+    1.15,
+    1.20,
+    1.25,
+    1.30,
+    1.40,
+    1.50,
+]
+
+CURATED_ADDITIONAL_FEATURES = [
+    "forecast_high",
+    "nws_forecast_high_f",
+    "ndfd_lead_hours",
+    "ndfd_grid_distance_km",
+    "day_of_year_cos",
+    "nws_relative_humidity",
+    "nws_wind_gust_kt",
+    "temp_range_so_far",
+    "min_temp_so_far",
+    "recent_forecast_revision",
+]
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -101,6 +165,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--include-student-t",
         action="store_true",
         help="Include Student-t in the broad stage. It has been numerically fragile in prior runs.",
+    )
+    parser.add_argument(
+        "--include-skew-normal",
+        action="store_true",
+        help="Include the custom skew-normal distribution in the broad stage.",
     )
     return parser.parse_args(argv)
 
@@ -125,6 +194,8 @@ def main(argv: list[str] | None = None) -> None:
     final_features = load_feature_columns(args.final_feature_list)
     feature_sets = build_feature_sets(final_features, safe_features)
     distributions = [normalize_distribution_name(value) for value in args.distributions]
+    if args.include_skew_normal:
+        distributions.append("skew_normal")
     if args.include_student_t:
         distributions.append("student_t")
     distributions = list(dict.fromkeys(distributions))
@@ -257,24 +328,41 @@ def build_feature_sets(
         "current36": final_features,
         "full_safe39": safe_features,
     }
-    addable = [
-        feature for feature in safe_features
-        if feature not in final_features
-    ]
-    for feature in addable:
-        candidates[f"current36_plus_{feature}"] = append_features(final_features, [feature], safe_features)
+    curated = [feature for feature in CURATED_ADDITIONAL_FEATURES if feature in safe_features]
+    for feature in [
+        "forecast_high",
+        "day_of_year_cos",
+        "temp_range_so_far",
+        "min_temp_so_far",
+        "recent_forecast_revision",
+    ]:
+        if feature in safe_features and feature not in final_features:
+            candidates[f"current36_plus_{feature}"] = append_features(
+                final_features,
+                [feature],
+                safe_features,
+            )
 
-    if len(addable) >= 2:
-        candidates["current36_plus_forecast_high_day_cos"] = append_features(
-            final_features,
-            ["forecast_high", "day_of_year_cos"],
-            safe_features,
-        )
-        candidates["current36_plus_forecast_high_temp_range"] = append_features(
-            final_features,
-            ["forecast_high", "temp_range_so_far"],
-            safe_features,
-        )
+    candidates["current36_plus_forecast_high_day_cos"] = append_features(
+        final_features,
+        ["forecast_high", "day_of_year_cos"],
+        safe_features,
+    )
+    candidates["current36_plus_forecast_high_temp_range"] = append_features(
+        final_features,
+        ["forecast_high", "temp_range_so_far"],
+        safe_features,
+    )
+    candidates["current36_plus_ndfd_metadata"] = append_features(
+        final_features,
+        ["ndfd_lead_hours", "ndfd_grid_distance_km"],
+        safe_features,
+    )
+    candidates["curated_weather_plus"] = append_features(
+        final_features,
+        curated,
+        safe_features,
+    )
 
     return candidates
 
@@ -301,7 +389,8 @@ def train_and_score_candidate(
 ) -> dict[str, Any]:
     started = time.perf_counter()
     dist = normalize_distribution_name(distribution)
-    run_id = stable_run_id(feature_name, dist, str(hyperparams["name"]))
+    effective_hyperparams = hyperparams_for_distribution(hyperparams, dist)
+    run_id = stable_run_id(feature_name, dist, str(effective_hyperparams["name"]))
     try:
         X_train, X_validation, X_test, imputer, preprocessing_notes = build_imputed_feature_frames(
             train_df=data_splits.train,
@@ -316,14 +405,14 @@ def train_and_score_candidate(
             X_val=X_validation,
             y_val=data_splits.validation[TARGET_COLUMN].to_numpy(dtype=float),
             distribution=dist,
-            n_estimators=int(hyperparams["n_estimators"]),
-            learning_rate=float(hyperparams["learning_rate"]),
-            max_depth=int(hyperparams["max_depth"]),
-            min_samples_leaf=int(hyperparams["min_samples_leaf"]),
-            minibatch_frac=float(hyperparams["minibatch_frac"]),
-            natural_gradient=bool(hyperparams["natural_gradient"]),
-            random_state=int(hyperparams["random_state"]),
-            early_stopping_rounds=hyperparams.get("early_stopping_rounds"),
+            n_estimators=int(effective_hyperparams["n_estimators"]),
+            learning_rate=float(effective_hyperparams["learning_rate"]),
+            max_depth=int(effective_hyperparams["max_depth"]),
+            min_samples_leaf=int(effective_hyperparams["min_samples_leaf"]),
+            minibatch_frac=float(effective_hyperparams["minibatch_frac"]),
+            natural_gradient=bool(effective_hyperparams["natural_gradient"]),
+            random_state=int(effective_hyperparams["random_state"]),
+            early_stopping_rounds=effective_hyperparams.get("early_stopping_rounds"),
         )
         validation_details = predict_distribution_details(model, X_validation, dist)
         test_details = predict_distribution_details(model, X_test, dist)
@@ -333,7 +422,7 @@ def train_and_score_candidate(
             "feature_set": feature_name,
             "feature_count": len(feature_columns),
             "distribution": dist,
-            "hyperparams": dict(hyperparams),
+            "hyperparams": dict(effective_hyperparams),
             "elapsed_seconds": time.perf_counter() - started,
             "model": model,
             "imputer": imputer,
@@ -350,10 +439,22 @@ def train_and_score_candidate(
             "feature_set": feature_name,
             "feature_count": len(feature_columns),
             "distribution": dist,
-            "hyperparams": dict(hyperparams),
+            "hyperparams": dict(effective_hyperparams),
             "elapsed_seconds": time.perf_counter() - started,
             "error_message": f"{type(exc).__name__}: {exc}",
         }
+
+
+def hyperparams_for_distribution(
+    hyperparams: dict[str, Any],
+    distribution: str,
+) -> dict[str, Any]:
+    result = dict(hyperparams)
+    if normalize_distribution_name(distribution) == "skew_normal":
+        result["natural_gradient"] = False
+        if not str(result["name"]).endswith("_directgrad"):
+            result["name"] = f"{result['name']}_directgrad"
+    return result
 
 
 def record_candidate_result(
@@ -415,12 +516,14 @@ def score_split(
     mu = np.asarray(details["mu"], dtype=float)
     sigma = np.asarray(details["sigma"], dtype=float) * float(sigma_factor)
     df_values = details.get("df")
+    skew_values = details.get("skew")
     nll = distribution_nll(
         y_true,
         mu=mu,
         sigma=sigma,
         distribution=dist,
         df=df_values,
+        skew=skew_values,
     )
     prediction_frame = build_prediction_frame(
         split_name=split_name,
@@ -430,6 +533,7 @@ def score_split(
         nll=np.asarray(nll, dtype=float),
         distribution_type=dist,
         df=df_values,
+        skew=skew_values,
     )
     if "row_id" not in prediction_frame.columns:
         prediction_frame.insert(0, "row_id", np.arange(len(prediction_frame), dtype=int))

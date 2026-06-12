@@ -247,7 +247,7 @@ Forecast error is defined as `actual_high - forecast_high`.
 {_format_mapping(forecast_error_summary)}
 
 ## Forecast-Source Caveat
-The forecast dataset is treated as a historical forecast proxy from Open-Meteo, not confirmed official NWS forecast data. Therefore, the current target should be described as actual high minus Open-Meteo historical forecast high unless true archived NWS forecast data is later substituted.
+The canonical forecast baseline is the timestamp-safe historical NWS/NDFD MaxT forecast. Open-Meteo forecast history is retained only as legacy/auxiliary input and should not be described as the training forecast_high source when NDFD coverage is complete.
 
 ## Validation Warnings
 {warning_lines}

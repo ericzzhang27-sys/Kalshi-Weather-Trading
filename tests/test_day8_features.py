@@ -16,6 +16,7 @@ from src.features import (  # noqa: E402
     add_observed_weather_features,
     add_time_features,
     build_feature_matrix,
+    load_inputs,
     write_feature_columns,
 )
 from src.leakage_checks import run_leakage_checks, write_leakage_report  # noqa: E402
@@ -138,6 +139,9 @@ def test_sequential_context_features_are_cumulative_and_timestamp_safe() -> None
     assert row_9am["temp_range_so_far"] == 15.0
     assert row_9am["area_under_temp_curve_so_far"] == 202.5
     assert row_9am["near_boundary_duration_so_far"] == 4
+    assert row_9am["minutes_until_typical_peak"] == 360.0
+    assert abs(row_9am["forecast_current_temp_gap_per_hour_to_peak"] - (25.0 / 6.0)) < 1e-12
+    assert abs(row_9am["needed_warming_rate_minus_recent_rate"] - ((25.0 / 6.0) - 5.0)) < 1e-12
 
     assert row_11am["max_temp_so_far"] == 100.0
     assert row_11am["temp_range_so_far"] == 40.0
@@ -145,6 +149,9 @@ def test_sequential_context_features_are_cumulative_and_timestamp_safe() -> None
     assert row_11am["mean_temp_error_so_far"] == 14.0 / 6.0
     assert row_11am["max_temp_error_so_far"] == 2.0
     assert row_11am["num_new_highs_last_3h"] == 3
+    assert row_11am["minutes_until_typical_peak"] == 240.0
+    assert row_11am["forecast_current_temp_gap_per_hour_to_peak"] == 0.0
+    assert row_11am["needed_warming_rate_minus_recent_rate"] == -10.0
 
     assert row_9am["max_temp_so_far"] < 110.0
     assert row_9am["temp_range_so_far"] < 50.0
@@ -164,6 +171,24 @@ def test_forecast_update_features_skip_forecasts_without_target_date() -> None:
 
     assert len(featured) == 1
     assert "recent_forecast_revision" not in featured.columns
+
+
+def test_forecast_update_features_compare_timezone_aware_ndfd_issue_times() -> None:
+    forecasts = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-05-20", "2026-05-20"]),
+            "location": ["NYC", "NYC"],
+            "forecast_issue_time": pd.to_datetime(
+                ["2026-05-20T11:00:00+00:00", "2026-05-20T12:00:00+00:00"],
+                utc=True,
+            ),
+            "forecast_high": [98.0, 100.0],
+        }
+    )
+
+    featured = add_forecast_update_features(_sample_rows().iloc[[0]], forecasts)
+
+    assert featured.loc[0, "recent_forecast_revision"] == 2.0
 
 
 def test_feature_matrix_derives_missing_weather_target_dates() -> None:
@@ -187,6 +212,30 @@ def test_feature_matrix_derives_missing_weather_target_dates() -> None:
     assert len(featured) == 2
     assert featured["max_temp_so_far"].notna().all()
     assert featured["forecast_temp_current_hour"].notna().all()
+
+
+def test_load_inputs_ignores_openmeteo_hourly_forecast_features(tmp_path: Path) -> None:
+    rows_path = tmp_path / "rows.csv"
+    hourly_path = tmp_path / "hourly.csv"
+    hourly_forecasts_path = tmp_path / "hourly_forecasts.csv"
+
+    _sample_rows().to_csv(rows_path, index=False)
+    _sample_hourly().to_csv(hourly_path, index=False)
+    hourly_forecasts = _sample_hourly_forecasts()
+    hourly_forecasts["forecast_source"] = "open_meteo_historical_forecast"
+    hourly_forecasts.to_csv(hourly_forecasts_path, index=False)
+
+    inputs = load_inputs(
+        rows_path=rows_path,
+        hourly_path=hourly_path,
+        hourly_forecasts_path=hourly_forecasts_path,
+        daily_path=tmp_path / "missing_daily.csv",
+        forecasts_path=tmp_path / "missing_forecasts.csv",
+    )
+
+    assert isinstance(inputs["hourly_forecasts"], pd.DataFrame)
+    assert inputs["hourly_forecasts"].empty
+    assert any("Open-Meteo forecast data and was ignored" in note for note in inputs["notes"])
 
 
 def test_feature_columns_exclude_target_and_actual_high(tmp_path: Path) -> None:

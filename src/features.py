@@ -22,8 +22,11 @@ DEFAULT_INPUT_PATHS = {
 }
 
 TARGET_COLUMN = "forecast_error"
+LOCAL_TIMEZONE = "America/New_York"
 TYPICAL_PEAK_HOUR = 15
 TEMP_CHANGE_WINDOWS_MINUTES = [60, 120, 180, 240, 300]
+FORECAST_CURRENT_TEMP_GAP_RATE_FEATURE = "forecast_current_temp_gap_per_hour_to_peak"
+NEEDED_WARMING_RATE_DELTA_FEATURE = "needed_warming_rate_minus_recent_rate"
 SEQUENTIAL_CONTEXT_FEATURES = [
     "current_temp_minus_max_so_far",
     "minutes_since_max_temp_so_far",
@@ -57,6 +60,7 @@ VALID_TIME_CANDIDATES = [
 ]
 
 TEMPERATURE_CANDIDATES = [
+    "nws_current_temp_f",
     "temperature_2m",
     "temperature",
     "temp",
@@ -64,26 +68,44 @@ TEMPERATURE_CANDIDATES = [
 ]
 
 DEW_POINT_CANDIDATES = [
+    "nws_dew_point_f",
     "dew_point_2m",
     "dew_point",
 ]
 
+RELATIVE_HUMIDITY_CANDIDATES = [
+    "nws_relative_humidity",
+    "relative_humidity_2m",
+    "relative_humidity",
+    "relh",
+]
+
 CLOUD_COVER_CANDIDATES = [
+    "nws_cloud_cover_pct",
     "cloud_cover",
     "cloudcover",
 ]
 
 WIND_SPEED_CANDIDATES = [
+    "nws_wind_speed_kt",
     "wind_speed_10m",
     "wind_speed",
 ]
 
 WIND_DIRECTION_CANDIDATES = [
+    "nws_wind_dir",
     "wind_direction_10m",
     "wind_direction",
 ]
 
+WIND_GUST_CANDIDATES = [
+    "nws_wind_gust_kt",
+    "wind_gusts_10m",
+    "wind_gust",
+]
+
 PRECIPITATION_CANDIDATES = [
+    "nws_precip_1h",
     "precipitation",
     "rain",
 ]
@@ -122,6 +144,7 @@ EXCLUDED_FEATURE_COLUMNS = {
     "actual_max_temp",
     "max_temp_today",
     "forecast_source",
+    "mean_temp_so_far",
 }
 
 FORBIDDEN_MODEL_FEATURE_COLUMNS = EXCLUDED_FEATURE_COLUMNS | {
@@ -289,6 +312,13 @@ def _read_csv_if_exists(path: Path, required: bool = False) -> pd.DataFrame:
     return _empty_frame()
 
 
+def _is_openmeteo_forecast_frame(df: pd.DataFrame) -> bool:
+    if df.empty or "forecast_source" not in df.columns:
+        return False
+    sources = df["forecast_source"].dropna().astype(str).str.lower().unique()
+    return len(sources) > 0 and all("open_meteo" in source for source in sources)
+
+
 def _append_note(df: pd.DataFrame, note: str) -> None:
     notes = list(df.attrs.get("feature_notes", []))
     if note not in notes:
@@ -311,6 +341,11 @@ def _first_existing(df: pd.DataFrame, candidates: list[str]) -> str | None:
         if candidate.lower() in normalized:
             return str(normalized[candidate.lower()])
     return None
+
+
+def _utc_to_local_naive(values: pd.Series) -> pd.Series:
+    parsed = pd.to_datetime(values, errors="coerce", utc=True)
+    return parsed.dt.tz_convert(LOCAL_TIMEZONE).dt.tz_localize(None)
 
 
 def _normalize_location_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -421,9 +456,11 @@ def _standardize_time_table(df: pd.DataFrame, table_name: str) -> pd.DataFrame:
     numeric_candidates = (
         TEMPERATURE_CANDIDATES
         + DEW_POINT_CANDIDATES
+        + RELATIVE_HUMIDITY_CANDIDATES
         + CLOUD_COVER_CANDIDATES
         + WIND_SPEED_CANDIDATES
         + WIND_DIRECTION_CANDIDATES
+        + WIND_GUST_CANDIDATES
         + PRECIPITATION_CANDIDATES
         + PRECIP_PROB_CANDIDATES
         + ["forecast_high"]
@@ -477,6 +514,12 @@ def load_inputs(
     forecasts = _standardize_time_table(_read_csv_if_exists(forecasts_candidate), "forecasts")
 
     notes: list[str] = []
+    if _is_openmeteo_forecast_frame(hourly_forecasts):
+        hourly_forecasts = _empty_frame()
+        notes.append(
+            "hourly_forecasts_clean.csv is Open-Meteo forecast data and was ignored; "
+            "training features use NWS/NDFD forecast_high plus observed NWS/ASOS features."
+        )
     if not hourly_forecasts.empty and _first_existing(hourly_forecasts, ISSUE_TIME_CANDIDATES) is None:
         notes.append(
             "hourly_forecasts_clean.csv has forecast valid timestamps but no issue/run/reference "
@@ -675,6 +718,7 @@ def _build_observed_context_table(hourly: pd.DataFrame, temp_col: str) -> pd.Dat
                 "temp_range_so_far",
                 "area_under_temp_curve_so_far",
                 "near_boundary_duration_so_far",
+                "mean_temp_so_far",
                 "num_new_highs_last_3h",
             ],
         )
@@ -700,7 +744,9 @@ def _build_observed_context_table(hourly: pd.DataFrame, temp_col: str) -> pd.Dat
         range_values: list[float] = []
         area_values: list[float] = []
         near_boundary_values: list[int] = []
+        mean_values: list[float] = []
         new_high_rows: list[dict[str, Any]] = []
+        temp_sum = 0.0
 
         for _, row in group.iterrows():
             timestamp = row["timestamp"]
@@ -715,6 +761,7 @@ def _build_observed_context_table(hourly: pd.DataFrame, temp_col: str) -> pd.Dat
             is_new_high = False
             if pd.notna(numeric_value):
                 observed_count += 1
+                temp_sum += numeric_value
                 if numeric_value > current_max:
                     current_max = numeric_value
                     is_new_high = True
@@ -731,6 +778,7 @@ def _build_observed_context_table(hourly: pd.DataFrame, temp_col: str) -> pd.Dat
             range_values.append(max_value - min_value if pd.notna(max_value) and pd.notna(min_value) else np.nan)
             area_values.append(area if observed_count else np.nan)
             near_boundary_values.append(near_boundary_count)
+            mean_values.append(temp_sum / observed_count if observed_count else np.nan)
 
             prev_time = timestamp
             prev_temp = numeric_value if pd.notna(numeric_value) else None
@@ -750,6 +798,7 @@ def _build_observed_context_table(hourly: pd.DataFrame, temp_col: str) -> pd.Dat
         enriched["temp_range_so_far"] = range_values
         enriched["area_under_temp_curve_so_far"] = area_values
         enriched["near_boundary_duration_so_far"] = near_boundary_values
+        enriched["mean_temp_so_far"] = mean_values
         enriched["num_new_highs_last_3h"] = trailing_new_high_counts
         pieces.append(enriched)
 
@@ -763,6 +812,7 @@ def _build_observed_context_table(hourly: pd.DataFrame, temp_col: str) -> pd.Dat
                 "temp_range_so_far",
                 "area_under_temp_curve_so_far",
                 "near_boundary_duration_so_far",
+                "mean_temp_so_far",
                 "num_new_highs_last_3h",
             ],
         )
@@ -791,20 +841,48 @@ def _build_cumulative_temp_error_table(
     ):
         return pd.DataFrame(columns=output_columns)
 
-    observed = hourly.loc[:, ["location", "target_date", "timestamp", temp_col]].rename(
-        columns={temp_col: "actual_temp_for_error"},
+    observed = (
+        hourly.loc[:, ["location", "target_date", "timestamp", temp_col]]
+        .rename(columns={temp_col: "actual_temp_for_error"})
+        .dropna(subset=["location", "target_date", "timestamp"])
+        .sort_values(["location", "target_date", "timestamp"])
     )
-    forecasts = hourly_forecasts.loc[
-        :,
-        ["location", "target_date", "timestamp", forecast_temp_col],
-    ].rename(columns={forecast_temp_col: "forecast_temp_for_error"})
+    forecasts = (
+        hourly_forecasts.loc[
+            :,
+            ["location", "target_date", "timestamp", forecast_temp_col],
+        ]
+        .rename(columns={forecast_temp_col: "forecast_temp_for_error"})
+        .dropna(subset=["location", "target_date", "timestamp"])
+        .sort_values(["location", "target_date", "timestamp"])
+    )
 
-    merged = observed.merge(
-        forecasts,
-        on=["location", "target_date", "timestamp"],
-        how="left",
-        validate="one_to_one",
-    )
+    pieces: list[pd.DataFrame] = []
+    for key, observed_group in observed.groupby(["location", "target_date"], dropna=False):
+        if not isinstance(key, tuple):
+            key = (key,)
+        forecast_group = forecasts[
+            (forecasts["location"] == key[0])
+            & (forecasts["target_date"] == key[1])
+        ].sort_values("timestamp")
+        if forecast_group.empty:
+            group = observed_group.copy()
+            group["forecast_temp_for_error"] = np.nan
+        else:
+            group = pd.merge_asof(
+                observed_group.sort_values("timestamp"),
+                forecast_group[["timestamp", "forecast_temp_for_error"]].sort_values("timestamp"),
+                on="timestamp",
+                direction="backward",
+                tolerance=pd.Timedelta(hours=2),
+            )
+            group["location"] = key[0]
+            group["target_date"] = key[1]
+        pieces.append(group)
+
+    if not pieces:
+        return pd.DataFrame(columns=output_columns)
+    merged = pd.concat(pieces, ignore_index=True)
     merged["temp_error"] = (
         pd.to_numeric(merged["actual_temp_for_error"], errors="coerce")
         - pd.to_numeric(merged["forecast_temp_for_error"], errors="coerce")
@@ -852,19 +930,33 @@ def add_observed_weather_features(rows: pd.DataFrame, hourly: pd.DataFrame) -> p
         return result
 
     dew_col = _first_existing(hourly, DEW_POINT_CANDIDATES)
+    humidity_col = _first_existing(hourly, RELATIVE_HUMIDITY_CANDIDATES)
     cloud_col = _first_existing(hourly, CLOUD_COVER_CANDIDATES)
     wind_speed_col = _first_existing(hourly, WIND_SPEED_CANDIDATES)
     wind_dir_col = _first_existing(hourly, WIND_DIRECTION_CANDIDATES)
+    wind_gust_col = _first_existing(hourly, WIND_GUST_CANDIDATES)
     precip_col = _first_existing(hourly, PRECIPITATION_CANDIDATES)
+    humidity_target = (
+        "nws_relative_humidity"
+        if humidity_col is not None and humidity_col.lower().startswith("nws_")
+        else "relative_humidity"
+    )
+    wind_gust_target = (
+        "nws_wind_gust_kt"
+        if wind_gust_col is not None and wind_gust_col.lower().startswith("nws_")
+        else "wind_gust"
+    )
 
     value_mapping = {
         temp_col: "current_temp",
     }
     optional_mapping = {
         dew_col: "dew_point",
+        humidity_col: humidity_target,
         cloud_col: "cloud_cover_now",
         wind_speed_col: "wind_speed",
         wind_dir_col: "wind_direction_degrees",
+        wind_gust_col: wind_gust_target,
         precip_col: "precipitation_now",
     }
     for source, target in optional_mapping.items():
@@ -891,10 +983,25 @@ def add_observed_weather_features(rows: pd.DataFrame, hourly: pd.DataFrame) -> p
     if "dew_point" in result.columns:
         result["temp_minus_dew_point"] = result["current_temp"] - result["dew_point"]
 
+    if "nws_current_temp_f" in hourly.columns:
+        result["nws_current_temp_f"] = result["current_temp"]
+    if "nws_dew_point_f" in hourly.columns and "dew_point" in result.columns:
+        result["nws_dew_point_f"] = result["dew_point"]
+    if "nws_wind_speed_kt" in hourly.columns and "wind_speed" in result.columns:
+        result["nws_wind_speed_kt"] = result["wind_speed"]
+    if "nws_precip_1h" in hourly.columns and "precipitation_now" in result.columns:
+        result["nws_precip_1h"] = result["precipitation_now"]
+    if "nws_cloud_cover_pct" in hourly.columns and "cloud_cover_now" in result.columns:
+        result["nws_cloud_cover_pct"] = result["cloud_cover_now"]
+    if "observation_source" in hourly.columns:
+        result["observed_temperature_source"] = "iem_nws_asos"
+
     if "wind_direction_degrees" in result.columns:
         direction_radians = np.deg2rad(pd.to_numeric(result["wind_direction_degrees"], errors="coerce"))
         result["wind_dir_sin"] = np.sin(direction_radians)
         result["wind_dir_cos"] = np.cos(direction_radians)
+        if "nws_wind_dir" in hourly.columns:
+            result["nws_wind_dir"] = result["wind_direction_degrees"]
         result = result.drop(columns=["wind_direction_degrees"])
     else:
         result["wind_dir_sin"] = np.nan
@@ -917,6 +1024,8 @@ def add_observed_weather_features(rows: pd.DataFrame, hourly: pd.DataFrame) -> p
     )
     result["max_temp_so_far"] = max_so_far["max_temp_so_far"]
     result["max_temp_so_far_source_time"] = max_so_far["max_temp_so_far_source_time"]
+    if "nws_current_temp_f" in hourly.columns:
+        result["nws_max_temp_so_far_f"] = result["max_temp_so_far"]
 
     interval_minutes = _observation_interval_minutes(hourly)
     if interval_minutes is None or interval_minutes > 45:
@@ -953,6 +1062,8 @@ def add_observed_weather_features(rows: pd.DataFrame, hourly: pd.DataFrame) -> p
             tolerance=pd.Timedelta(minutes=45),
         )
         result[f"temp_change_{minutes}m"] = result["current_temp"] - lookback["current_temp"]
+        if "nws_current_temp_f" in hourly.columns and minutes in {60, 120, 180}:
+            result[f"nws_temp_change_{minutes}m"] = result[f"temp_change_{minutes}m"]
         result = result.drop(columns=[lookup_col])
 
     result["temp_acceleration_60m"] = (
@@ -1091,7 +1202,29 @@ def add_forecast_relative_features(
             result[column] = np.nan
 
     if hourly_forecasts.empty:
-        _append_note(result, "Forecast-relative hourly features skipped because hourly_forecasts_clean.csv is missing.")
+        if "forecast_high" in result.columns:
+            result["forecast_temp_current_hour"] = result["forecast_high"]
+            result["forecast_max_so_far"] = result["forecast_high"]
+            if "current_temp" in result.columns:
+                result["current_temp_minus_forecast_temp"] = (
+                    result["current_temp"] - result["forecast_temp_current_hour"]
+                )
+            if "max_temp_so_far" in result.columns:
+                result["max_so_far_minus_forecast_max_so_far"] = (
+                    result["max_temp_so_far"] - result["forecast_max_so_far"]
+                )
+            if "forecast_issue_time" in result.columns:
+                issue_time = _utc_to_local_naive(result["forecast_issue_time"])
+                result["forecast_temp_source_issue_time"] = issue_time
+                result["forecast_source_issue_time"] = issue_time
+            _append_note(
+                result,
+                "Forecast-relative hourly feature columns were reproduced from the "
+                "timestamp-safe NDFD daily-high forecast because no NWS hourly forecast "
+                "temperature archive is available.",
+            )
+        else:
+            _append_note(result, "Forecast-relative hourly features skipped because hourly_forecasts_clean.csv is missing.")
         return result
 
     temp_col = _first_existing(hourly_forecasts, TEMPERATURE_CANDIDATES)
@@ -1266,15 +1399,19 @@ def add_sequential_context_features(
         left_time_col="prediction_time",
         right_time_col="timestamp",
         value_cols=[
+            "min_temp_so_far",
             "temp_range_so_far",
             "area_under_temp_curve_so_far",
             "near_boundary_duration_so_far",
+            "mean_temp_so_far",
             "num_new_highs_last_3h",
         ],
         tolerance=pd.Timedelta(hours=24),
     )
     for column in context.columns:
         result[column] = context[column]
+    if "nws_current_temp_f" in hourly.columns:
+        result["nws_min_temp_so_far_f"] = result["min_temp_so_far"]
 
     forecast_temp_col = (
         _first_existing(hourly_forecasts, TEMPERATURE_CANDIDATES)
@@ -1282,10 +1419,21 @@ def add_sequential_context_features(
         else None
     )
     if forecast_temp_col is None:
-        _append_note(
-            result,
-            "mean_temp_error_so_far skipped; hourly forecast temperature is unavailable.",
-        )
+        if {"mean_temp_so_far", "forecast_high"}.issubset(result.columns):
+            result["mean_temp_error_so_far"] = (
+                result["mean_temp_so_far"] - result["forecast_high"]
+            )
+            _append_note(
+                result,
+                "mean_temp_error_so_far reproduced as mean observed temperature so far "
+                "minus the timestamp-safe NDFD daily-high forecast because no NWS "
+                "hourly forecast temperature archive is available.",
+            )
+        else:
+            _append_note(
+                result,
+                "mean_temp_error_so_far skipped; hourly forecast temperature is unavailable.",
+            )
     else:
         error_table = _build_cumulative_temp_error_table(
             hourly,
@@ -1320,6 +1468,8 @@ def add_sequential_context_features(
         "abs(temp - round(temp)) <= 0.5°F, so it counts non-missing hourly "
         "observations under normal numeric rounding.",
     )
+    if "nws_current_temp_f" in hourly.columns:
+        result["nws_current_minus_max_so_far"] = result["current_temp_minus_max_so_far"]
     return result
 
 
@@ -1335,6 +1485,46 @@ def add_solar_time_features(df: pd.DataFrame) -> pd.DataFrame:
     _append_note(
         result,
         "minutes_until_sunset skipped; no extra solar dependency was added for Day 8.",
+    )
+    return result
+
+
+def add_peak_gap_rate_feature(df: pd.DataFrame) -> pd.DataFrame:
+    result = df.copy()
+    feature = FORECAST_CURRENT_TEMP_GAP_RATE_FEATURE
+    delta_feature = NEEDED_WARMING_RATE_DELTA_FEATURE
+    result[feature] = np.nan
+    result[delta_feature] = np.nan
+    required_columns = {"forecast_high", "current_temp", "minutes_until_typical_peak"}
+
+    if required_columns.issubset(result.columns):
+        forecast_high = pd.to_numeric(result["forecast_high"], errors="coerce")
+        current_temp = pd.to_numeric(result["current_temp"], errors="coerce")
+        hours_until_peak = (
+            pd.to_numeric(result["minutes_until_typical_peak"], errors="coerce") / 60.0
+        )
+        with np.errstate(divide="ignore", invalid="ignore"):
+            gap_rate = (forecast_high - current_temp) / hours_until_peak
+        gap_rate = pd.Series(gap_rate, index=result.index, dtype=float)
+        gap_rate = gap_rate.where(hours_until_peak.abs() > 1e-9)
+        result[feature] = gap_rate.replace([np.inf, -np.inf], np.nan)
+
+    if {feature, "temp_change_180m"}.issubset(result.columns):
+        recent_warming_rate = pd.to_numeric(result["temp_change_180m"], errors="coerce") / 3.0
+        result[delta_feature] = (
+            pd.to_numeric(result[feature], errors="coerce") - recent_warming_rate
+        )
+
+    _merge_notes(result, df)
+    _append_note(
+        result,
+        "forecast_current_temp_gap_per_hour_to_peak is (forecast_high - current_temp) "
+        "divided by hours until the 3 PM typical peak; zero-hour rows are left missing.",
+    )
+    _append_note(
+        result,
+        "needed_warming_rate_minus_recent_rate compares the forecast-required warming "
+        "rate to the observed 3-hour warming rate temp_change_180m / 3.",
     )
     return result
 
@@ -1372,30 +1562,61 @@ def add_forecast_update_features(rows: pd.DataFrame, forecasts: pd.DataFrame) ->
             f"required columns: {missing_columns}.",
         )
         return result
+    forecasts = forecasts.copy()
+    forecasts["target_date"] = pd.to_datetime(
+        forecasts["target_date"],
+        errors="coerce",
+    ).dt.normalize()
+    result["target_date"] = pd.to_datetime(
+        result["target_date"],
+        errors="coerce",
+    ).dt.normalize()
+    result["prediction_time"] = pd.to_datetime(result["prediction_time"], errors="coerce")
+    issue_times = pd.to_datetime(forecasts[issue_col], errors="coerce")
+    if getattr(issue_times.dt, "tz", None) is not None:
+        issue_times = issue_times.dt.tz_convert(LOCAL_TIMEZONE).dt.tz_localize(None)
+    forecasts[issue_col] = issue_times
+    forecasts["forecast_high"] = pd.to_numeric(forecasts["forecast_high"], errors="coerce")
+    forecasts = forecasts.dropna(subset=["location", "target_date", issue_col])
 
     revisions = pd.DataFrame(index=result.index)
     revisions["recent_forecast_revision"] = np.nan
     revisions["forecast_spread"] = np.nan
     revisions["model_disagreement"] = np.nan
 
-    for row_index, row in result.iterrows():
-        candidates = forecasts[
-            (forecasts["location"] == row["location"])
-            & (forecasts["target_date"] == row["target_date"])
-            & (forecasts[issue_col] <= row["prediction_time"])
-        ].sort_values(issue_col)
-        if candidates.empty:
-            continue
+    forecast_groups = {
+        key: group.sort_values(issue_col).reset_index(drop=True)
+        for key, group in forecasts.groupby(["location", "target_date"], dropna=False)
+    }
 
-        highs = pd.to_numeric(candidates["forecast_high"], errors="coerce")
-        if len(highs.dropna()) >= 2:
-            revisions.at[row_index, "recent_forecast_revision"] = highs.iloc[-1] - highs.iloc[-2]
-        if "forecast_source" in candidates.columns and candidates["forecast_source"].nunique() > 1:
-            latest_issue = candidates[issue_col].max()
-            latest = candidates[candidates[issue_col] == latest_issue]
-            latest_highs = pd.to_numeric(latest["forecast_high"], errors="coerce")
-            revisions.at[row_index, "forecast_spread"] = latest_highs.max() - latest_highs.min()
-            revisions.at[row_index, "model_disagreement"] = latest_highs.std()
+    for key, row_indices in result.groupby(["location", "target_date"], dropna=False).groups.items():
+        group = forecast_groups.get(key)
+        if group is None or group.empty:
+            continue
+        issue_values = group[issue_col].to_numpy(dtype="datetime64[ns]")
+
+        for row_index in row_indices:
+            prediction_time = result.at[row_index, "prediction_time"]
+            if pd.isna(prediction_time):
+                continue
+            cutoff = np.searchsorted(
+                issue_values,
+                np.datetime64(prediction_time),
+                side="right",
+            )
+            if cutoff == 0:
+                continue
+            candidates = group.iloc[:cutoff]
+
+            highs = candidates["forecast_high"]
+            if len(highs.dropna()) >= 2:
+                revisions.at[row_index, "recent_forecast_revision"] = highs.iloc[-1] - highs.iloc[-2]
+            if "forecast_source" in candidates.columns and candidates["forecast_source"].nunique() > 1:
+                latest_issue = candidates[issue_col].max()
+                latest = candidates[candidates[issue_col] == latest_issue]
+                latest_highs = latest["forecast_high"]
+                revisions.at[row_index, "forecast_spread"] = latest_highs.max() - latest_highs.min()
+                revisions.at[row_index, "model_disagreement"] = latest_highs.std()
 
     for column in revisions.columns:
         result[column] = revisions[column]
@@ -1485,6 +1706,7 @@ def build_feature_matrix(
     )
 
     result = add_solar_time_features(result)
+    result = add_peak_gap_rate_feature(result)
 
     forecasts = inputs.get("forecasts", _empty_frame())
     forecasts = (

@@ -37,6 +37,7 @@ METADATA_COLUMNS = [
     "model_version",
     "distribution_type",
     "df",
+    "skew",
     "forecast_horizon_hours",
     "split",
 ]
@@ -86,6 +87,8 @@ def predict_distribution_params(
     result["distribution_type"] = str(details["distribution_type"])
     if details["df"] is not None:
         result["df"] = np.asarray(details["df"], dtype=float)
+    if details.get("skew") is not None:
+        result["skew"] = np.asarray(details["skew"], dtype=float)
 
     ordered = [column for column in METADATA_COLUMNS if column in result.columns]
     remaining = [column for column in result.columns if column not in ordered]

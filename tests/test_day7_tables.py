@@ -19,8 +19,14 @@ from src.supervised_table import (  # noqa: E402
     expand_targets_to_prediction_times,
     validate_supervised_rows,
 )
+from src.forecast_data import (  # noqa: E402
+    NDFD_FORECAST_SOURCE,
+    _prediction_timestamp_utc,
+    build_prediction_time_forecasts,
+)
 from src.target_builder import (  # noqa: E402
     build_daily_forecast_error_targets,
+    build_prediction_forecast_error_rows,
     validate_daily_targets,
 )
 
@@ -110,3 +116,59 @@ def test_target_and_audit_columns_are_not_marked_as_baseline_features() -> None:
     assert TARGET_COLUMN not in BASELINE_FEATURE_COLUMNS
     assert "actual_high" not in BASELINE_FEATURE_COLUMNS
     assert "forecast_high" in BASELINE_FEATURE_COLUMNS
+
+
+def test_prediction_time_targets_use_latest_ndfd_issue_with_openmeteo_fallback() -> None:
+    openmeteo = pd.DataFrame(
+        {
+            "date": ["2026-05-20"],
+            "location": ["NYC"],
+            "forecast_high": [78.0],
+            "forecast_source": ["open_meteo_historical_forecast"],
+        }
+    )
+    ndfd = pd.DataFrame(
+        {
+            "date": ["2026-05-20"],
+            "location": ["NYC"],
+            "forecast_high": [79.0],
+            "forecast_source": [NDFD_FORECAST_SOURCE],
+            "forecast_issue_time": ["2026-05-20T10:00:00+00:00"],
+            "nws_forecast_high_f": [79.0],
+            "ndfd_valid_time_utc": ["2026-05-21T00:00:00+00:00"],
+        }
+    )
+
+    forecasts = build_prediction_time_forecasts(openmeteo, ndfd, PREDICTION_TIMES)
+    rows = build_prediction_forecast_error_rows(_sample_daily_actuals().head(1), forecasts)
+
+    validate_supervised_rows(rows)
+
+    before_issue = rows.loc[rows["prediction_time"] == "05:00"].iloc[0]
+    at_issue = rows.loc[rows["prediction_time"] == "06:00"].iloc[0]
+
+    assert before_issue["forecast_source"] == "open_meteo_historical_forecast"
+    assert before_issue["forecast_high"] == pytest.approx(78.0)
+    assert before_issue["forecast_error"] == pytest.approx(2.0)
+    assert at_issue["forecast_source"] == NDFD_FORECAST_SOURCE
+    assert at_issue["forecast_high"] == pytest.approx(79.0)
+    assert at_issue["forecast_error"] == pytest.approx(1.0)
+    assert at_issue["openmeteo_forecast_high_f"] == pytest.approx(78.0)
+    assert at_issue["nws_forecast_high_f"] == pytest.approx(79.0)
+
+
+def test_prediction_timestamp_utc_handles_dst_edges() -> None:
+    converted = _prediction_timestamp_utc(
+        pd.Series(
+            [
+                "2022-03-13 02:00",
+                "2022-11-06 01:00",
+            ]
+        ),
+        "America/New_York",
+    )
+
+    assert converted.tolist() == [
+        pd.Timestamp("2022-03-13 07:00:00+00:00"),
+        pd.Timestamp("2022-11-06 05:00:00+00:00"),
+    ]

@@ -451,6 +451,7 @@ def compute_distribution_reports(
     for split_name, split_df in iter_evaluation_splits(params):
         dist = infer_params_distribution_type(split_df)
         df_values = split_df["df"] if dist == "student_t" and "df" in split_df.columns else None
+        skew_values = split_df["skew"] if dist == "skew_normal" and "skew" in split_df.columns else None
         validate_distribution_params(split_df, dist_type=dist)
         coverage = prediction_interval_coverage(
             split_df["forecast_error"],
@@ -459,6 +460,7 @@ def compute_distribution_reports(
             levels=(0.5, 0.8, 0.9),
             dist_type=dist,
             df=df_values,
+            skew=skew_values,
         )
         coverage.insert(0, "split", split_name)
         coverage_frames.append(coverage)
@@ -469,6 +471,7 @@ def compute_distribution_reports(
             split_df["sigma"],
             dist_type=dist,
             df=df_values,
+            skew=skew_values,
         )
         summary = residual_summary(z)
         summary.insert(0, "split", split_name)
@@ -480,6 +483,7 @@ def compute_distribution_reports(
             split_df["sigma"],
             dist_type=dist,
             df=df_values,
+            skew=skew_values,
         )
 
     return (
@@ -591,6 +595,7 @@ def compute_model_comparison(
         split_df = params[params["split"] == split_name].copy()
         dist = infer_params_distribution_type(split_df)
         df_values = split_df["df"] if dist == "student_t" and "df" in split_df.columns else None
+        skew_values = split_df["skew"] if dist == "skew_normal" and "skew" in split_df.columns else None
         probs = error_interval_probabilities(split_df, dist_type=dist)
         labels = assign_error_interval_labels(split_df["forecast_error"])
         brier = bucket_brier_scores(probs, labels)
@@ -605,6 +610,7 @@ def compute_model_comparison(
                     split_df["sigma"],
                     dist_type=dist,
                     df=df_values,
+                    skew=skew_values,
                 ),
                 interval_log_loss_value=interval_log_loss(probs, labels),
                 mean_bucket_brier=float(brier["brier_score"].mean()),
@@ -707,6 +713,7 @@ def error_interval_probabilities(df: pd.DataFrame, dist_type: str | None = None)
     mu = pd.to_numeric(df["mu"], errors="raise").to_numpy(dtype=float)
     sigma = pd.to_numeric(df["sigma"], errors="raise").to_numpy(dtype=float)
     df_values = df["df"] if dist == "student_t" and "df" in df.columns else None
+    skew_values = df["skew"] if dist == "skew_normal" and "skew" in df.columns else None
     probabilities: dict[str, np.ndarray] = {}
     for spec in ERROR_INTERVAL_SCHEMA:
         lower = spec["lower"]
@@ -714,12 +721,26 @@ def error_interval_probabilities(df: pd.DataFrame, dist_type: str | None = None)
         lower_cdf = (
             np.zeros(len(df), dtype=float)
             if lower is None
-            else distribution_cdf(float(lower), mu=mu, sigma=sigma, distribution=dist, df=df_values)
+            else distribution_cdf(
+                float(lower),
+                mu=mu,
+                sigma=sigma,
+                distribution=dist,
+                df=df_values,
+                skew=skew_values,
+            )
         )
         upper_cdf = (
             np.ones(len(df), dtype=float)
             if upper is None
-            else distribution_cdf(float(upper), mu=mu, sigma=sigma, distribution=dist, df=df_values)
+            else distribution_cdf(
+                float(upper),
+                mu=mu,
+                sigma=sigma,
+                distribution=dist,
+                df=df_values,
+                skew=skew_values,
+            )
         )
         probabilities[spec["label"]] = np.asarray(upper_cdf - lower_cdf, dtype=float)
     probs = pd.DataFrame(probabilities).reset_index(drop=True)

@@ -19,12 +19,14 @@ from src.supervised_table import (  # noqa: E402
 )
 from src.target_builder import (  # noqa: E402
     build_daily_forecast_error_targets,
+    build_prediction_forecast_error_rows,
     validate_daily_targets,
 )
 
 
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
 OUTPUTS_DIR = REPO_ROOT / "outputs" / "day7_targets"
+REPORTS_DIR = REPO_ROOT / "outputs" / "reports"
 
 DAILY_ACTUAL_INPUT = PROCESSED_DIR / "daily_clean.csv"
 DAILY_FORECAST_INPUT = PROCESSED_DIR / "forecasts_clean.csv"
@@ -39,6 +41,7 @@ INPUT_PROFILE_PATHS = [
 DAILY_TARGET_OUTPUT = PROCESSED_DIR / "daily_forecast_error_targets.csv"
 SUPERVISED_OUTPUT = PROCESSED_DIR / "supervised_forecast_error_rows.csv"
 TARGET_SUMMARY_OUTPUT = OUTPUTS_DIR / "target_summary.csv"
+TARGET_SUMMARY_REPORT_OUTPUT = REPORTS_DIR / "target_summary.csv"
 
 SUMMARY_COLUMNS = [
     "location",
@@ -218,7 +221,16 @@ def _forecast_source_warnings(forecasts_df: pd.DataFrame) -> list[str]:
     warning_messages: list[str] = []
     if "forecast_source" in forecasts_df.columns:
         sources = sorted(str(value) for value in forecasts_df["forecast_source"].dropna().unique())
-        if any("open_meteo" in source.lower() for source in sources):
+        has_nws_ndfd = any("nws_ndfd" in source.lower() for source in sources)
+        has_openmeteo = any("open_meteo" in source.lower() for source in sources)
+        if has_nws_ndfd and has_openmeteo:
+            fallback_rows = int(forecasts_df["forecast_source"].astype(str).str.contains("open_meteo", case=False, na=False).sum())
+            warning_messages.append(
+                f"NDFD forecast rows are used where available, but {fallback_rows} rows still "
+                "contain Open-Meteo fallback forecasts. Canonical training rebuilds should fail "
+                "until every prediction row has an as-of-available NDFD issue."
+            )
+        elif has_openmeteo:
             warning_messages.append(
                 "Forecast data is an Open-Meteo historical forecast proxy, not "
                 "confirmed official NWS archived forecast data."
@@ -248,6 +260,7 @@ def _forecast_source_warnings(forecasts_df: pd.DataFrame) -> list[str]:
 def main() -> None:
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
     print("Day 7 input inspection")
     for path in INPUT_PROFILE_PATHS:
@@ -259,14 +272,31 @@ def main() -> None:
     captured_warning_messages: list[str] = []
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        daily_targets = build_daily_forecast_error_targets(daily_actual, daily_forecasts)
-        validate_daily_targets(daily_targets)
+        has_prediction_time_forecasts = {
+            "prediction_time",
+            "prediction_timestamp",
+        }.issubset(daily_forecasts.columns)
 
-        supervised_rows = expand_targets_to_prediction_times(
-            daily_targets,
-            prediction_times=PREDICTION_TIMES,
-        )
-        validate_supervised_rows(supervised_rows)
+        if has_prediction_time_forecasts:
+            supervised_rows = build_prediction_forecast_error_rows(
+                daily_actual,
+                daily_forecasts,
+            )
+            validate_supervised_rows(supervised_rows)
+            daily_targets = supervised_rows.drop_duplicates(
+                subset=["date", "location"],
+                keep="first",
+            ).reset_index(drop=True)
+            validate_daily_targets(daily_targets)
+        else:
+            daily_targets = build_daily_forecast_error_targets(daily_actual, daily_forecasts)
+            validate_daily_targets(daily_targets)
+
+            supervised_rows = expand_targets_to_prediction_times(
+                daily_targets,
+                prediction_times=PREDICTION_TIMES,
+            )
+            validate_supervised_rows(supervised_rows)
 
     captured_warning_messages.extend(str(item.message) for item in caught)
     captured_warning_messages.extend(_forecast_source_warnings(daily_forecasts))
@@ -280,8 +310,9 @@ def main() -> None:
         FLOAT_SUMMARY_COLUMNS,
     ].round(6)
     target_summary.to_csv(TARGET_SUMMARY_OUTPUT, index=False)
+    target_summary.to_csv(TARGET_SUMMARY_REPORT_OUTPUT, index=False)
 
-    target_errors = pd.to_numeric(daily_targets["forecast_error"], errors="coerce")
+    target_errors = pd.to_numeric(supervised_rows["forecast_error"], errors="coerce")
     locations = sorted(str(value) for value in daily_targets["location"].dropna().unique())
 
     print("\nDay 7 supervised forecast-error table complete.")

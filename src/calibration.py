@@ -67,6 +67,7 @@ def fit_global_sigma_scale(
     coverage_levels: tuple[float, ...] = (0.5, 0.8, 0.9, 0.95),
     dist_type: str = "normal",
     df: pd.Series | np.ndarray | list[float] | float | None = None,
+    skew: pd.Series | np.ndarray | list[float] | float | None = None,
     coverage_penalty_weight: float = 0.25,
 ) -> tuple[float, pd.DataFrame]:
     """
@@ -91,6 +92,7 @@ def fit_global_sigma_scale(
             calibrated_sigma,
             dist_type=dist_type,
             df=df,
+            skew=skew,
         )
         coverage = prediction_interval_coverage(
             y_true,
@@ -99,6 +101,7 @@ def fit_global_sigma_scale(
             levels=coverage_levels,
             dist_type=dist_type,
             df=df,
+            skew=skew,
         )
         row: dict[str, float] = {
             "alpha": float(alpha),
@@ -133,6 +136,7 @@ def cdf_reliability_table(
     method: str | None = None,
     dist_type: str = "normal",
     df: pd.Series | np.ndarray | list[float] | float | None = None,
+    skew: pd.Series | np.ndarray | list[float] | float | None = None,
 ) -> pd.DataFrame:
     y = np.asarray(y_true, dtype=float)
     mu_array = np.asarray(mu, dtype=float)
@@ -157,6 +161,7 @@ def cdf_reliability_table(
             sigma=sigma_array,
             distribution=dist_type,
             df=df,
+            skew=skew,
         )
         actual = (y <= threshold_value).astype(int)
         table = make_calibration_table(predicted, actual, n_bins=n_bins)

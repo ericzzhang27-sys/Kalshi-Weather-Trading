@@ -1,0 +1,142 @@
+{
+  "feature_columns": [
+    "day_of_year_sin",
+    "hour_sin",
+    "hour_cos",
+    "month",
+    "season",
+    "forecast_horizon_hours",
+    "current_temp",
+    "dew_point",
+    "cloud_cover_now",
+    "wind_speed",
+    "precipitation_now",
+    "temp_minus_dew_point",
+    "wind_dir_sin",
+    "wind_dir_cos",
+    "max_temp_so_far",
+    "temp_change_60m",
+    "temp_change_120m",
+    "temp_change_180m",
+    "temp_change_240m",
+    "temp_change_300m",
+    "temp_acceleration_60m",
+    "temp_change_60m_minus_3h_avg_rate",
+    "forecast_temp_current_hour",
+    "current_temp_minus_forecast_temp",
+    "forecast_max_so_far",
+    "max_so_far_minus_forecast_max_so_far",
+    "current_temp_minus_max_so_far",
+    "minutes_since_max_temp_so_far",
+    "hour_of_max_temp_so_far",
+    "max_so_far_minus_forecast_high",
+    "mean_temp_error_so_far",
+    "max_temp_error_so_far",
+    "num_new_highs_last_3h",
+    "area_under_temp_curve_so_far",
+    "near_boundary_duration_so_far",
+    "minutes_until_typical_peak"
+  ],
+  "target": "forecast_error",
+  "model_name": "robust_laplace_ngboost_current36",
+  "distribution_type": "laplace",
+  "training_params": {
+    "distribution": "laplace",
+    "n_estimators": 120,
+    "learning_rate": 0.05,
+    "max_depth": 2,
+    "min_samples_leaf": 50,
+    "minibatch_frac": 1.0,
+    "natural_gradient": true,
+    "random_state": 11,
+    "early_stopping_rounds": null
+  },
+  "split_summary": {
+    "strategy": "chronological",
+    "date_column": "date",
+    "train_end_date": "2023-12-31",
+    "validation_start_date": "2024-01-01",
+    "validation_end_date": "2024-12-31",
+    "test_start_date": "2025-01-01",
+    "splits": {
+      "train": {
+        "row_count": 16791,
+        "date_min": "2022-01-01",
+        "date_max": "2023-12-31"
+      },
+      "validation": {
+        "row_count": 8396,
+        "date_min": "2024-01-01",
+        "date_max": "2024-12-31"
+      },
+      "test": {
+        "row_count": 11610,
+        "date_min": "2025-01-01",
+        "date_max": "2026-05-20"
+      }
+    }
+  },
+  "fit_rows": 25187,
+  "test_rows": 11610,
+  "preprocessing_notes": {
+    "rows_dropped": 0,
+    "imputation_strategy": "median fit on train only",
+    "missing_and_infinite_values_by_split": {
+      "train": {
+        "missing_values": 21901,
+        "infinite_values": 0,
+        "total_values_imputed_or_replaced": 21901
+      },
+      "validation": {
+        "missing_values": 11210,
+        "infinite_values": 0,
+        "total_values_imputed_or_replaced": 11210
+      },
+      "test": {
+        "missing_values": 11210,
+        "infinite_values": 0,
+        "total_values_imputed_or_replaced": 11210
+      }
+    },
+    "train_imputer_medians": {
+      "day_of_year_sin": 1.2246467991473532e-16,
+      "hour_sin": 1.2246467991473532e-16,
+      "hour_cos": -1.8369701987210294e-16,
+      "month": 7.0,
+      "season": 2.0,
+      "forecast_horizon_hours": 3.0,
+      "current_temp": 57.0,
+      "dew_point": 44.0,
+      "cloud_cover_now": 0.0,
+      "wind_speed": 4.0,
+      "precipitation_now": 0.0,
+      "temp_minus_dew_point": 14.0,
+      "wind_dir_sin": 0.0,
+      "wind_dir_cos": 0.6427876096865393,
+      "max_temp_so_far": 60.0,
+      "temp_change_60m": 0.0,
+      "temp_change_120m": 0.0,
+      "temp_change_180m": 0.0,
+      "temp_change_240m": -0.8999999999999986,
+      "temp_change_300m": -1.0,
+      "temp_acceleration_60m": 0.0,
+      "temp_change_60m_minus_3h_avg_rate": 0.0,
+      "forecast_temp_current_hour": 65.03000000000004,
+      "current_temp_minus_forecast_temp": -6.030000000000051,
+      "forecast_max_so_far": 65.03000000000004,
+      "max_so_far_minus_forecast_max_so_far": -2.9900219726562938,
+      "current_temp_minus_max_so_far": -1.0,
+      "minutes_since_max_temp_so_far": 129.0,
+      "hour_of_max_temp_so_far": 10.0,
+      "max_so_far_minus_forecast_high": -2.9900219726562938,
+      "mean_temp_error_so_far": -8.644285714285758,
+      "max_temp_error_so_far": -2.9900219726562938,
+      "num_new_highs_last_3h": 0.0,
+      "area_under_temp_curve_so_far": 556.9083333333333,
+      "near_boundary_duration_so_far": 14.0,
+      "minutes_until_typical_peak": 180.0
+    }
+  },
+  "created_at_utc": "2026-06-11T02:29:36.177686+00:00",
+  "notes": "Single fixed robust model. No hyperparameter search, sigma scaling, or validation-based model selection was performed."
+}

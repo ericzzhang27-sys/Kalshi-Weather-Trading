@@ -95,6 +95,7 @@ def main(argv: list[str] | None = None) -> None:
         distribution="normal",
         model_output_path=NORMAL_MODEL_PATH,
         prepared=prepared,
+        training_params=training_params_from_args(args),
     )
     trained_candidates["ngboost_normal_v1"] = normal_params
 
@@ -115,6 +116,7 @@ def main(argv: list[str] | None = None) -> None:
                 distribution=distribution,
                 model_output_path=output_path,
                 prepared=prepared,
+                training_params=training_params_from_args(args),
             )
             if distribution == "laplace":
                 write_model_artifact(
@@ -194,7 +196,24 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         action="store_true",
         help="Retry full NGBoost Student-t training despite prior numerical instability.",
     )
+    parser.add_argument("--n-estimators", type=int, default=120)
+    parser.add_argument("--learning-rate", type=float, default=0.05)
+    parser.add_argument("--max-depth", type=int, default=2)
+    parser.add_argument("--min-samples-leaf", type=int, default=50)
+    parser.add_argument("--minibatch-frac", type=float, default=1.0)
+    parser.add_argument("--early-stopping-rounds", type=int, default=20)
     return parser.parse_args(argv)
+
+
+def training_params_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "n_estimators": int(args.n_estimators),
+        "learning_rate": float(args.learning_rate),
+        "max_depth": int(args.max_depth),
+        "min_samples_leaf": int(args.min_samples_leaf),
+        "minibatch_frac": float(args.minibatch_frac),
+        "early_stopping_rounds": int(args.early_stopping_rounds),
+    }
 
 
 def prepare_training_data(
@@ -258,14 +277,22 @@ def train_and_predict_candidate(
     distribution: str,
     model_output_path: Path,
     prepared: dict[str, Any],
+    training_params: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     dist = normalize_distribution_name(distribution)
+    params = training_params or {}
     model = train_ngboost_distribution(
         X_train=prepared["X_train"],
         y_train=prepared["y_train"],
         X_val=prepared["X_validation"],
         y_val=prepared["y_validation"],
         distribution=dist,
+        n_estimators=int(params.get("n_estimators", 120)),
+        learning_rate=float(params.get("learning_rate", 0.05)),
+        max_depth=int(params.get("max_depth", 2)),
+        min_samples_leaf=int(params.get("min_samples_leaf", 50)),
+        minibatch_frac=float(params.get("minibatch_frac", 1.0)),
+        early_stopping_rounds=int(params.get("early_stopping_rounds", 20)),
     )
 
     validation_details = predict_distribution_details(model, prepared["X_validation"], dist)
@@ -307,12 +334,14 @@ def build_candidate_params(
         mu = np.asarray(details["mu"], dtype=float)
         sigma = np.asarray(details["sigma"], dtype=float)
         df_values = details.get("df")
+        skew_values = details.get("skew")
         nll = distribution_nll(
             y,
             mu=mu,
             sigma=sigma,
             distribution=distribution,
             df=df_values,
+            skew=skew_values,
         )
         frame = build_prediction_frame(
             split_name=split_name,
@@ -324,6 +353,7 @@ def build_candidate_params(
         frame["scale"] = sigma
         frame["distribution_type"] = distribution
         frame["df"] = np.asarray(df_values, dtype=float) if df_values is not None else np.nan
+        frame["skew"] = np.asarray(skew_values, dtype=float) if skew_values is not None else np.nan
         frame["model_name"] = model_name
         frame["sigma_adjustment"] = float(sigma_adjustment)
         append_diagnostic_columns(frame, split_df)
@@ -377,12 +407,14 @@ def validate_candidate_cdf(params: pd.DataFrame) -> None:
         raise ValueError("Candidate has no validation rows")
     dist = str(validation["distribution_type"].iloc[0])
     df_values = validation["df"] if normalize_distribution_name(dist) == "student_t" else None
+    skew_values = validation["skew"] if normalize_distribution_name(dist) == "skew_normal" else None
     values = distribution_cdf(
         validation[TARGET_COLUMN],
         mu=validation["mu"],
         sigma=validation["sigma"],
         distribution=dist,
         df=df_values,
+        skew=skew_values,
     )
     if not np.isfinite(values).all() or ((values < 0.0) | (values > 1.0)).any():
         raise ValueError(f"{dist} candidate failed stable CDF validation")
@@ -485,6 +517,9 @@ def evaluate_candidate_split(
     distribution: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     df_values = split_df["df"] if normalize_distribution_name(distribution) == "student_t" else None
+    skew_values = (
+        split_df["skew"] if normalize_distribution_name(distribution) == "skew_normal" else None
+    )
     coverage = prediction_interval_coverage(
         split_df[TARGET_COLUMN],
         split_df["mu"],
@@ -492,6 +527,7 @@ def evaluate_candidate_split(
         levels=(0.5, 0.8, 0.9),
         dist_type=distribution,
         df=df_values,
+        skew=skew_values,
     ).set_index("level")
     pit = compute_pit_values(
         split_df[TARGET_COLUMN],
@@ -499,6 +535,7 @@ def evaluate_candidate_split(
         split_df["sigma"],
         dist_type=distribution,
         df=df_values,
+        skew=skew_values,
     )
     z = standardized_residuals(
         split_df[TARGET_COLUMN],
@@ -506,6 +543,7 @@ def evaluate_candidate_split(
         split_df["sigma"],
         dist_type=distribution,
         df=df_values,
+        skew=skew_values,
     )
     residual = residual_summary(z).iloc[0]
 
@@ -575,6 +613,9 @@ def error_interval_probabilities(
     distribution: str,
 ) -> tuple[pd.DataFrame, pd.Series]:
     df_values = split_df["df"] if normalize_distribution_name(distribution) == "student_t" else None
+    skew_values = (
+        split_df["skew"] if normalize_distribution_name(distribution) == "skew_normal" else None
+    )
     probabilities: dict[str, np.ndarray] = {}
     for spec in ERROR_INTERVAL_SCHEMA:
         lower = spec["lower"]
@@ -588,6 +629,7 @@ def error_interval_probabilities(
                 sigma=split_df["sigma"],
                 distribution=distribution,
                 df=df_values,
+                skew=skew_values,
             )
         )
         upper_cdf = (
@@ -599,6 +641,7 @@ def error_interval_probabilities(
                 sigma=split_df["sigma"],
                 distribution=distribution,
                 df=df_values,
+                skew=skew_values,
             )
         )
         probabilities[str(spec["label"])] = np.asarray(upper_cdf - lower_cdf, dtype=float)
@@ -894,14 +937,22 @@ def load_day13_summary() -> str:
     coverage = pd.read_csv(coverage_path)
     residual = pd.read_csv(residual_path)
     eval_report = pd.read_csv(eval_path)
-    val_eval = eval_report[(eval_report["model"] == "ngboost_normal_v0") & (eval_report["split"] == "validation")].iloc[0]
-    test_eval = eval_report[(eval_report["model"] == "ngboost_normal_v0") & (eval_report["split"] == "test")].iloc[0]
+    if (eval_report["model"] == "ngboost_normal_v0").any():
+        model_name = "ngboost_normal_v0"
+    else:
+        oos_models = eval_report[eval_report["split"].isin(["validation", "test"])]["model"]
+        model_name = str(oos_models.dropna().iloc[0]) if not oos_models.dropna().empty else ""
+    model_rows = eval_report[eval_report["model"] == model_name]
+    if model_name == "" or model_rows[model_rows["split"] == "validation"].empty or model_rows[model_rows["split"] == "test"].empty:
+        return "Prior Day 13 diagnostics did not contain a complete validation/test model summary."
+    val_eval = model_rows[model_rows["split"] == "validation"].iloc[0]
+    test_eval = model_rows[model_rows["split"] == "test"].iloc[0]
     val_cov = coverage[coverage["split"] == "validation"].set_index("level")
     test_cov = coverage[coverage["split"] == "test"].set_index("level")
     val_res = residual[residual["split"] == "validation"].iloc[0]
     test_res = residual[residual["split"] == "test"].iloc[0]
     return (
-        f"Day 13 Normal `ngboost_normal_v0` had validation NLL {float(val_eval['nll']):.4f} "
+        f"Prior `{model_name}` had validation NLL {float(val_eval['nll']):.4f} "
         f"and test NLL {float(test_eval['nll']):.4f}. Validation coverage was "
         f"50/80/90% = {float(val_cov.loc[0.5, 'actual_coverage']):.3f}/"
         f"{float(val_cov.loc[0.8, 'actual_coverage']):.3f}/"

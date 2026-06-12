@@ -28,8 +28,8 @@ Every prediction only used rows with date < prediction row date. Same-date and f
 4. all_past: all rows before the prediction row date.
 
 ## Validation Setup
-- Train rows: 26,304
-- Test rows: 12,120
+- Train rows: 25,187
+- Test rows: 11,610
 - Train date range: 2022-01-01 to 2024-12-31
 - Test date range: 2025-01-01 to 2026-05-20
 - Intervals: (-inf, -3], (-3, -1], (-1, 1], (1, 3], (3, inf)
@@ -44,43 +44,44 @@ Forecast horizon note:
 ## Forecast Horizon Diagnostics
 | Split | Min | 25th pct | Median | 75th pct | Max | Negative | Zero | Positive |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Train | -8.00 | -2.25 | 3.50 | 9.25 | 15.00 | 8,768 | 1,096 | 16,440 |
-| Test | -8.00 | -2.25 | 3.50 | 9.25 | 15.00 | 4,040 | 505 | 7,575 |
+| Train | -8.00 | -3.00 | 3.00 | 9.00 | 15.00 | 8,757 | 1,094 | 15,336 |
+| Test | -8.00 | -3.00 | 3.00 | 9.00 | 15.00 | 4,038 | 505 | 7,067 |
 
 ## Candidate Sample Size Diagnostics
 | Min | 25th pct | Median | 75th pct | Max |
 | ---: | ---: | ---: | ---: | ---: |
-| 183 | 183 | 183 | 183 | 184 |
+| 181 | 183 | 183 | 183 | 1955 |
 
 ## Uniform Baseline Comparison
-- Empirical mean NLL: 1.488905
-- Normal mean NLL: 1.474166
+- Empirical mean NLL: 1.475525
+- Normal mean NLL: 1.469916
 - Uniform baseline NLL: 1.609438
-- Empirical NLL improvement vs uniform: 0.120533
-- Normal NLL improvement vs uniform: 0.135272
+- Empirical NLL improvement vs uniform: 0.133913
+- Normal NLL improvement vs uniform: 0.139522
 
 ## Normal Distribution Baseline
 This comparator uses the same leakage-safe historical candidate rows as the empirical baseline, then fits a normal distribution with the candidate mean and sample standard deviation.
-- Mean NLL: 1.474166
-- Median NLL: 1.236724
-- Top-interval accuracy: 0.267327
-- Average probability assigned to true interval: 0.255241
-- Average fitted sigma: 2.122079
-- Brier score over interval probabilities: 0.756382
+- Mean NLL: 1.469916
+- Median NLL: 1.396051
+- Top-interval accuracy: 0.317399
+- Average probability assigned to true interval: 0.242027
+- Average fitted sigma: 2.653500
+- Brier score over interval probabilities: 0.751169
 
 ## Results
-- Number of test rows: 12,120
-- Mean NLL: 1.488905
-- Median NLL: 1.349155
-- Top-interval accuracy: 0.243564
-- Average probability assigned to true interval: 0.252455
-- Average sample size: 183.18
-- Brier score over interval probabilities: 0.771243
+- Number of test rows: 11,610
+- Mean NLL: 1.475525
+- Median NLL: 1.436166
+- Top-interval accuracy: 0.314470
+- Average probability assigned to true interval: 0.243686
+- Average sample size: 183.10
+- Brier score over interval probabilities: 0.754054
 
 ## Fallback Usage
 | Fallback level | Count | Percent | Mean NLL | Average sample size |
 | --- | ---: | ---: | ---: | ---: |
-| same_station_doy_hour_horizon | 12,120 | 100.00% | 1.488905 | 183.18 |
+| same_station_doy_hour_horizon | 11,609 | 99.99% | 1.475527 | 182.95 |
+| same_station_month | 1 | 0.01% | 1.443603 | 1955.00 |
 
 ## Limitations
 - Sparse samples can make some fallback levels noisy.

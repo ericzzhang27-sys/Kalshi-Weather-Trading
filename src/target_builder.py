@@ -25,7 +25,33 @@ FORECAST_SOURCE_CANDIDATES = [
     "model_source",
     "source",
 ]
+OPTIONAL_ACTUAL_AUDIT_COLUMNS = [
+    "official_daily_high_f",
+    "actual_source",
+    "source_file",
+    "source_station",
+    "source_station_name",
+]
+OPTIONAL_FORECAST_AUDIT_COLUMNS = [
+    "forecast_source",
+    "forecast_issue_time",
+    "openmeteo_forecast_high_f",
+    "nws_forecast_high_f",
+    "forecast_fallback_reason",
+    "ndfd_valid_time_utc",
+    "ndfd_lead_hours",
+    "ndfd_grid_distance_km",
+]
 TARGET_COLUMNS = ["date", "location", "actual_high", "forecast_high", "forecast_error"]
+PREDICTION_TARGET_COLUMNS = [
+    "date",
+    "location",
+    "prediction_time",
+    "prediction_timestamp",
+    "actual_high",
+    "forecast_high",
+    "forecast_error",
+]
 
 
 def _rename_first_match(
@@ -119,7 +145,9 @@ def _prepare_daily_actuals(daily_df: pd.DataFrame) -> pd.DataFrame:
             "Could not identify actual daily high column. "
             f"Available columns: {list(actual_df.columns)}"
         )
-    if actual_high_column != "actual_high":
+    if actual_high_column == "official_daily_high_f":
+        actual_df["actual_high"] = pd.to_numeric(actual_df[actual_high_column], errors="coerce")
+    elif actual_high_column != "actual_high":
         actual_df = actual_df.rename(columns={actual_high_column: "actual_high"})
 
     actual_df = _rename_first_match(actual_df, ACTUAL_SOURCE_CANDIDATES, "actual_source")
@@ -149,6 +177,42 @@ def _prepare_daily_forecasts(forecasts_df: pd.DataFrame) -> pd.DataFrame:
         forecast_df["forecast_high"],
         errors="coerce",
     )
+    return forecast_df
+
+
+def _normalise_prediction_time(value: object) -> str:
+    parts = str(value).strip().split(":")
+    if len(parts) < 2:
+        raise ValueError(f"Prediction time must be HH:MM, got {value!r}")
+    return f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+
+
+def _prepare_prediction_forecasts(forecasts_df: pd.DataFrame) -> pd.DataFrame:
+    forecast_df = _prepare_daily_forecasts(forecasts_df)
+    if "prediction_time" not in forecast_df.columns and "prediction_timestamp" not in forecast_df.columns:
+        raise ValueError("Prediction-time forecasts must include prediction_time or prediction_timestamp")
+
+    if "prediction_timestamp" in forecast_df.columns:
+        forecast_df["prediction_timestamp"] = pd.to_datetime(
+            forecast_df["prediction_timestamp"],
+            errors="raise",
+        )
+    if "prediction_time" not in forecast_df.columns:
+        forecast_df["prediction_time"] = forecast_df["prediction_timestamp"].dt.strftime("%H:%M")
+
+    forecast_df["prediction_time"] = forecast_df["prediction_time"].map(_normalise_prediction_time)
+    if "prediction_timestamp" not in forecast_df.columns:
+        forecast_df["prediction_timestamp"] = pd.to_datetime(
+            forecast_df["date"].dt.strftime("%Y-%m-%d") + " " + forecast_df["prediction_time"],
+            errors="raise",
+        )
+
+    if "forecast_issue_time" in forecast_df.columns:
+        forecast_df["forecast_issue_time"] = pd.to_datetime(
+            forecast_df["forecast_issue_time"],
+            errors="coerce",
+            utc=True,
+        )
     return forecast_df
 
 
@@ -183,11 +247,11 @@ def build_daily_forecast_error_targets(
 
     actual_columns = _available_ordered_columns(
         actual_df,
-        ["date", "location", "actual_high", "actual_source"],
+        ["date", "location", "actual_high", *OPTIONAL_ACTUAL_AUDIT_COLUMNS],
     )
     forecast_columns = _available_ordered_columns(
         forecast_df,
-        ["date", "location", "forecast_high", "forecast_source"],
+        ["date", "location", "forecast_high", *OPTIONAL_FORECAST_AUDIT_COLUMNS],
     )
 
     merged = actual_df.loc[:, actual_columns].merge(
@@ -211,10 +275,74 @@ def build_daily_forecast_error_targets(
 
     ordered_columns = TARGET_COLUMNS + [
         column
-        for column in ["actual_source", "forecast_source"]
+        for column in [*OPTIONAL_ACTUAL_AUDIT_COLUMNS, *OPTIONAL_FORECAST_AUDIT_COLUMNS]
         if column in merged.columns
     ]
     result = merged.loc[:, ordered_columns].sort_values(["location", "date"])
+    return result.reset_index(drop=True)
+
+
+def build_prediction_forecast_error_rows(
+    daily_df: pd.DataFrame,
+    forecasts_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Join daily actual highs to prediction-time forecast highs by date/location.
+    Compute forecast_error = actual_high - forecast_high for each prediction row.
+    """
+    actual_df = _prepare_daily_actuals(daily_df)
+    forecast_df = _prepare_prediction_forecasts(forecasts_df)
+    actual_df, forecast_df = _align_location_columns(actual_df, forecast_df)
+
+    _require_unique_keys(actual_df, ["date", "location"], "daily_df")
+    _require_unique_keys(
+        forecast_df,
+        ["date", "location", "prediction_time"],
+        "forecasts_df",
+    )
+
+    actual_columns = _available_ordered_columns(
+        actual_df,
+        ["date", "location", "actual_high", *OPTIONAL_ACTUAL_AUDIT_COLUMNS],
+    )
+    forecast_columns = _available_ordered_columns(
+        forecast_df,
+        [
+            "date",
+            "location",
+            "prediction_time",
+            "prediction_timestamp",
+            "forecast_high",
+            *OPTIONAL_FORECAST_AUDIT_COLUMNS,
+        ],
+    )
+
+    merged = actual_df.loc[:, actual_columns].merge(
+        forecast_df.loc[:, forecast_columns],
+        on=["date", "location"],
+        how="inner",
+        validate="one_to_many",
+    )
+
+    if len(actual_df) and merged[["date", "location"]].drop_duplicates().shape[0] < len(actual_df):
+        warnings.warn(
+            "Prediction target join dropped dates because actual and forecast coverage "
+            "does not fully overlap.",
+            stacklevel=2,
+        )
+
+    merged["forecast_error"] = (
+        merged["actual_high"] - merged["forecast_high"]
+    ).round(FORECAST_ERROR_DECIMALS)
+
+    ordered_columns = PREDICTION_TARGET_COLUMNS + [
+        column
+        for column in [*OPTIONAL_ACTUAL_AUDIT_COLUMNS, *OPTIONAL_FORECAST_AUDIT_COLUMNS]
+        if column in merged.columns
+    ]
+    result = merged.loc[:, ordered_columns].sort_values(
+        ["location", "date", "prediction_timestamp"]
+    )
     return result.reset_index(drop=True)
 
 

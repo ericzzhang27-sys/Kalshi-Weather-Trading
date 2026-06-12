@@ -82,6 +82,7 @@ FINAL_OUTPUT_COLUMN_ORDER = [
     "alpha",
     "distribution_type",
     "df",
+    "skew",
     "model_name",
     "calibration_method",
     "feature_missing_values",

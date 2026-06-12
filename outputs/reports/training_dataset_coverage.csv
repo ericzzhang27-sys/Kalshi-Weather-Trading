@@ -1,0 +1,2 @@
+rows,target_date_range,prediction_time_range,missing_official_daily_high_f,missing_actual_high,missing_forecast_high,missing_forecast_error,missing_nws_current_temp_f,missing_nws_max_temp_so_far_f,dropped_critical_rows,dropped_critical_fraction,critical_columns
+36797,2022-01-01 00:00:00 to 2026-05-20 00:00:00,2022-01-01 01:00:00 to 2026-05-20 23:00:00,0,0,0,0,0,0,1627,0.04234332708723714,forecast_error;forecast_high;actual_high;prediction_time;target_date;current_temp;max_temp_so_far

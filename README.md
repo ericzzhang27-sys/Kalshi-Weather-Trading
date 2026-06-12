@@ -43,7 +43,7 @@ The project converts final-temperature bucket boundaries into forecast-error bou
 ## Current Modeling Direction
 
 - Primary model: NGBoost / distributional gradient boosting on `forecast_error`.
-- Current configured distribution: Laplace, with sigma scaling from `config/model_config.yaml`.
+- Current configured distribution: Normal, with sigma scaling from `config/model_config.yaml`.
 - Required baseline: empirical historical forecast-error distribution.
 - Bucket probabilities: derived from one coherent model-implied CDF.
 - Evaluation priority: probability quality, calibration, interval coverage, and leakage safety.
@@ -90,10 +90,17 @@ Conventional entry files such as `README.md`, `.gitignore`, and `requirements*.t
 
 The data pipeline is timestamp based. Each modeling row represents a prediction made at `prediction_time`.
 
+Current canonical sources:
+
+- Actual daily high: official NOAA/NWS daily TMAX for Central Park.
+- Intraday observed features: IEM/NWS ASOS station observations.
+- Forecast high baseline: timestamp-safe NWS/NDFD historical MaxT archive.
+- Open-Meteo forecast history: retained only as legacy/auxiliary input and not used as the training forecast anchor.
+
 High-level flow:
 
 ```text
-raw observations + forecasts
+NWS observations + NDFD forecasts
 -> cleaned processed data
 -> supervised forecast-error rows
 -> timestamp-safe feature table
@@ -108,9 +115,9 @@ Important processed files:
 | File | Purpose |
 |---|---|
 | `data/processed/hourly_clean.csv` | Cleaned hourly observations. |
-| `data/processed/hourly_forecasts_clean.csv` | Cleaned hourly forecast data. |
+| `data/processed/hourly_forecasts_clean.csv` | Legacy/auxiliary hourly forecast data; ignored by the current NWS/NDFD feature contract unless replaced by an NWS-issued hourly source. |
 | `data/processed/daily_clean.csv` | Cleaned daily observations. |
-| `data/processed/forecasts_clean.csv` | Cleaned daily forecast data. |
+| `data/processed/forecasts_clean.csv` | Timestamp-safe NWS/NDFD daily MaxT forecast rows. |
 | `data/processed/supervised_forecast_error_rows.csv` | Forecast-error target rows at prediction timestamps. |
 | `data/processed/modeling_rows_v1.csv` | Final modeling rows with timestamp-safe features. |
 
@@ -122,8 +129,10 @@ Feature groups include:
 
 - Calendar and clock features such as day of year, month, season, and hour.
 - Observed weather features such as current temperature, dew point, cloud cover, wind, and precipitation.
-- Forecast-relative features such as current temperature minus forecast temperature.
+- Forecast-relative features such as current temperature minus the timestamp-safe NDFD forecast baseline.
 - Intraday path features such as max temperature so far, time since max so far, area under the temperature curve so far, and recent new-high counts.
+
+The current NDFD archive is daily MaxT, not hourly forecast temperature. To preserve the restored 36-feature model contract, hourly forecast-relative columns are reproduced from the as-of-available NDFD daily-high forecast.
 
 Key sequential features include:
 
@@ -277,10 +286,22 @@ Build timestamp-safe features:
 python scripts/build_features.py
 ```
 
+Verify feature provenance and model-safe feature integrity:
+
+```bash
+python scripts/verify_feature_integrity.py
+```
+
 Train the configured NGBoost model:
 
 ```bash
 python -m src.train_ngboost
+```
+
+Train the fixed robust no-search baseline model:
+
+```bash
+python scripts/train_robust_laplace_baseline.py
 ```
 
 Convert distributions to bucket probabilities:
@@ -315,8 +336,8 @@ pytest
 
 ## Current Limitations
 
-- Current forecast inputs are Open-Meteo historical forecast proxies, not verified archived NWS forecast products.
-- Forecast issue/run timestamps are missing, so true forecast as-of availability cannot be fully verified.
+- Forecast highs now come from historical NWS/NDFD MaxT rows with issue-time filtering, but they are still gridded NDFD forecasts rather than direct Kalshi-visible quote history.
+- The current NDFD archive supplies daily MaxT, not full hourly forecast-temperature paths, so hourly forecast-relative features use the timestamp-safe daily-high forecast as a fallback baseline.
 - Hourly data may miss true intrahour daily highs.
 - Settlement rules, station choice, endpoint conventions, and rounding can materially affect bucket mapping.
 - Market prices are not yet integrated as timestamp-correct order-book data.

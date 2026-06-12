@@ -1,0 +1,60 @@
+{
+  "candidate_artifacts": {
+    "feature_list": "outputs/feature_lists/current36_plus_gap_rate_quick.json",
+    "model": "models/ngboost_normal_current36_plus_gap_quick.pkl",
+    "features": "models/ngboost_normal_current36_plus_gap_quick_features.json",
+    "params": "outputs\\ngboost_distribution_params_current36_plus_gap_quick.csv",
+    "metrics": "outputs\\ngboost_nll_current36_plus_gap_quick.json"
+  },
+  "comparison_metric_note": "mean_bucket_brier matches the repo evaluation convention: mean of one-vs-realized Brier scores across market bucket columns.",
+  "comparison": [
+    {
+      "model": "current_main_normal36",
+      "split": "validation",
+      "feature_count": 36,
+      "n_rows": 8396,
+      "nll": 1.7558630370002015,
+      "bucket_log_loss": 1.0892085690016178,
+      "mean_bucket_brier": 0.1204483976801315,
+      "coverage_80": 0.8536207717960933,
+      "coverage_90": 0.9248451643639828,
+      "mean_sigma": NaN
+    },
+    {
+      "model": "current_main_normal36",
+      "split": "test",
+      "feature_count": 36,
+      "n_rows": 11610,
+      "nll": 1.6873181437271778,
+      "bucket_log_loss": 1.068653336405648,
+      "mean_bucket_brier": 0.1172007836016766,
+      "coverage_80": 0.8836347975882859,
+      "coverage_90": 0.9415159345391904,
+      "mean_sigma": NaN
+    },
+    {
+      "model": "normal_current36_plus_gap_quick",
+      "split": "validation",
+      "feature_count": 37,
+      "n_rows": 8396,
+      "nll": 1.8199438522173275,
+      "bucket_log_loss": 1.1338333009129649,
+      "mean_bucket_brier": 0.09797494087904142,
+      "coverage_80": 0.8050262029537876,
+      "coverage_90": 0.8918532634587899,
+      "mean_sigma": 1.509989241358043
+    },
+    {
+      "model": "normal_current36_plus_gap_quick",
+      "split": "test",
+      "feature_count": 37,
+      "n_rows": 11610,
+      "nll": 1.7215071948603933,
+      "bucket_log_loss": 1.0375077931468912,
+      "mean_bucket_brier": 0.09200662068834103,
+      "coverage_80": 0.8356589147286821,
+      "coverage_90": 0.9177433247200689,
+      "mean_sigma": 1.512967143000263
+    }
+  ]
+}

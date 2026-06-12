@@ -1,0 +1,55 @@
+{
+  "old_modeling_rows": 38424,
+  "old_modeling_date_min": "2022-01-01",
+  "old_modeling_date_max": "2026-05-20",
+  "old_target_source": "open_meteo_historical_daily_max_in_processed_actual_high",
+  "old_forecast_sources": [
+    "open_meteo_historical_forecast"
+  ],
+  "old_evaluation_rows": [
+    {
+      "model": "ngboost_laplace_v0",
+      "split": "validation",
+      "bucket_schema": "day9_forecast_error_intervals",
+      "n_rows": 8784,
+      "nll": 1.1931149214619805,
+      "interval_log_loss": 0.8928967674766072,
+      "mean_bucket_brier": 0.0943304883612906,
+      "coverage_error_50": 0.1454918032786885,
+      "coverage_error_80": 0.1114298724954462,
+      "coverage_error_90": 0.0673269581056466,
+      "residual_mean": 0.1108590494234594,
+      "residual_std": 0.6919478483850378
+    },
+    {
+      "model": "ngboost_laplace_v0",
+      "split": "test",
+      "bucket_schema": "day9_forecast_error_intervals",
+      "n_rows": 12120,
+      "nll": 1.4010265924689025,
+      "interval_log_loss": 0.9048908443043268,
+      "mean_bucket_brier": 0.094821569815279,
+      "coverage_error_50": 0.0570957095709571,
+      "coverage_error_80": 0.0733498349834983,
+      "coverage_error_90": 0.0570957095709571,
+      "residual_mean": -0.0359111571142699,
+      "residual_std": 0.8434854979857382
+    },
+    {
+      "model": "empirical_baseline_day9",
+      "split": "test",
+      "bucket_schema": "day9_forecast_error_intervals",
+      "n_rows": 12120,
+      "nll": NaN,
+      "interval_log_loss": 1.4889052210402325,
+      "mean_bucket_brier": 0.1542486447894262,
+      "coverage_error_50": NaN,
+      "coverage_error_80": NaN,
+      "coverage_error_90": NaN,
+      "residual_mean": NaN,
+      "residual_std": NaN
+    }
+  ],
+  "old_baseline_rows": 12120,
+  "old_baseline_mean_nll": 1.488905221040232
+}

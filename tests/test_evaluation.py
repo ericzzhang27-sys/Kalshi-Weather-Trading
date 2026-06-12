@@ -136,6 +136,18 @@ def test_student_t_pit_values_are_supported() -> None:
     assert ((pit >= 0.0) & (pit <= 1.0)).all()
 
 
+def test_skew_normal_pit_values_are_supported() -> None:
+    pit = compute_pit_values(
+        y_true=np.array([-1.0, 0.0, 1.0]),
+        mu=np.zeros(3),
+        sigma=np.ones(3),
+        dist_type="skew_normal",
+        skew=np.full(3, 3.0),
+    )
+
+    assert ((pit >= 0.0) & (pit <= 1.0)).all()
+
+
 def test_bucket_probability_validation_catches_bad_row_sums() -> None:
     bad_probs = pd.DataFrame({"cold": [0.2, 0.3], "warm": [0.4, 0.3]})
 
