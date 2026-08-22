@@ -8,6 +8,10 @@ on:
     paths:
       - scripts/backfill_knyc_iem.py
       - .github/workflows/backfill-knyc-data.yml
+  pull_request:
+    paths:
+      - scripts/backfill_knyc_iem.py
+      - .github/workflows/backfill-knyc-data.yml
 
 permissions:
   contents: write
@@ -39,6 +43,7 @@ jobs:
         run: cat outputs/data/knyc_backfill_coverage.json
 
       - name: Commit compact historical outputs
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -51,5 +56,3 @@ jobs:
             git commit -m "Backfill KNYC observations and CLI settlement proxy [skip ci]"
             git push origin HEAD:data/settlement-aligned-8y
           fi
-
-# Explicit second push so the newly registered workflow runs on this feature branch.
