@@ -38,6 +38,21 @@ jobs:
       - name: Validate CLI versus existing NCEI TMAX
         run: python scripts/validate_knyc_settlement_sources.py
 
+      - name: Upload historical data package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kalshi_weather_data_2018_2026
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            data/raw/NYC_nws_hourly_2018_2026.csv
+            data/processed/knyc_cli_daily_2018_2026.csv
+            outputs/data/knyc_backfill_coverage.json
+            outputs/data/knyc_cli_vs_ncei_validation.json
+            outputs/data/knyc_cli_vs_ncei_mismatches.csv
+            config/source_parity.yaml
+            docs/data/settlement_aligned_history.md
+
       - name: Commit generated outputs to PR branch
         run: |
           git config user.name "github-actions[bot]"
