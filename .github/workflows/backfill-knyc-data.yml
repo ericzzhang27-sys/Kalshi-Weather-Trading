@@ -51,3 +51,5 @@ jobs:
             git commit -m "Backfill KNYC observations and CLI settlement proxy [skip ci]"
             git push origin HEAD:data/settlement-aligned-8y
           fi
+
+# Explicit second push so the newly registered workflow runs on this feature branch.
