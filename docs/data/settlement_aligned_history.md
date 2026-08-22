@@ -28,6 +28,8 @@ Generated outputs:
 - `outputs/data/knyc_cli_vs_ncei_validation.json`
 - `outputs/data/knyc_cli_vs_ncei_mismatches.csv`
 
+These generated outputs are also packaged by the PR validation workflow for reproducible handoff without modifying the underlying CSV contents.
+
 ## Important interpretation
 
 The IEM CLI dataset is parsed from NWS Daily Climate Report text products. It is preferred over reconstructing a daily maximum from hourly observations because a settlement contract is resolved from a reported climate value, not necessarily the maximum visible in an hourly series.
