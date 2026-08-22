@@ -1,0 +1,53 @@
+name: Backfill KNYC settlement-aligned data
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - data/settlement-aligned-8y
+    paths:
+      - scripts/backfill_knyc_iem.py
+      - .github/workflows/backfill-knyc-data.yml
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: data/settlement-aligned-8y
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install data dependencies
+        run: pip install pandas==2.3.3 requests==2.32.5
+
+      - name: Backfill 2018 through current date
+        run: |
+          python scripts/backfill_knyc_iem.py \
+            --start-date 2018-01-01 \
+            --end-date "$(date -u +%F)"
+
+      - name: Show coverage
+        run: cat outputs/data/knyc_backfill_coverage.json
+
+      - name: Commit compact historical outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw/NYC_nws_hourly_2018_2026.csv \
+                  data/processed/knyc_cli_daily_2018_2026.csv \
+                  outputs/data/knyc_backfill_coverage.json
+          if git diff --cached --quiet; then
+            echo "No data changes to commit"
+          else
+            git commit -m "Backfill KNYC observations and CLI settlement proxy [skip ci]"
+            git push origin HEAD:data/settlement-aligned-8y
+          fi
