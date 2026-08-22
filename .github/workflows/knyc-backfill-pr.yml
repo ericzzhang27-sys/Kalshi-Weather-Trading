@@ -1,0 +1,55 @@
+name: Validate KNYC historical backfill PR
+
+on:
+  pull_request:
+    paths:
+      - scripts/backfill_knyc_iem.py
+      - scripts/validate_knyc_settlement_sources.py
+      - .github/workflows/backfill-knyc-data.yml
+      - docs/data/settlement_aligned_history.md
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install data dependencies
+        run: pip install pandas==2.3.3 requests==2.32.5
+
+      - name: Backfill KNYC 2018-present
+        run: |
+          python scripts/backfill_knyc_iem.py \
+            --start-date 2018-01-01 \
+            --end-date "$(date -u +%F)"
+
+      - name: Validate CLI versus existing NCEI TMAX
+        run: python scripts/validate_knyc_settlement_sources.py
+
+      - name: Commit generated outputs to PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw/NYC_nws_hourly_2018_2026.csv \
+                  data/processed/knyc_cli_daily_2018_2026.csv \
+                  outputs/data/knyc_backfill_coverage.json \
+                  outputs/data/knyc_cli_vs_ncei_validation.json \
+                  outputs/data/knyc_cli_vs_ncei_mismatches.csv
+          if git diff --cached --quiet; then
+            echo "No generated data changes"
+          else
+            git commit -m "Backfill KNYC historical data [skip ci]"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
