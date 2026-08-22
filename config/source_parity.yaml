@@ -1,0 +1,107 @@
+version: 1
+policy:
+  name: historical_live_source_parity
+  fail_closed: true
+  require_same_producer: true
+  require_same_product_family: true
+  require_same_variable_definition: true
+  require_same_station_or_grid_mapping: true
+  require_same_units: true
+  require_same_issue_valid_time_semantics: true
+  transport_may_differ_only_if_same_operational_product: true
+  notes:
+    - A historical archive may be delivered by a different host only when it is an archived copy of the same operational product used live.
+    - Reanalysis, retrospective hindcasts, reconstructed forecasts, and provider-substitute forecasts are not production-safe historical inputs.
+    - Open-Meteo data may be retained for research comparisons but must not be part of the production feature set.
+
+sources:
+  knyc_asos:
+    role: intraday_observations
+    producer: NOAA/NWS ASOS
+    product_family: KNYC routine and special METAR/ASOS observations
+    station: KNYC
+    historical_access: IEM ASOS archive/backend
+    live_access: IEM real-time ASOS ingest/backend
+    parity_status: approved
+    production_use: true
+    caveat: IEM is the transport/processor for both historical and live rows; the underlying observations are KNYC ASOS/METAR.
+
+  knyc_asos_1min:
+    role: high_frequency_observations
+    producer: NOAA/NCEI ASOS
+    product_family: one-minute ASOS archive
+    station: KNYC
+    historical_access: NCEI/IEM one-minute archive
+    live_access: null
+    parity_status: research_only
+    production_use: false
+    caveat: Monthly archival product does not have an equivalent low-latency live feed with the same semantics.
+
+  ndfd:
+    role: official_nws_forecast
+    producer: NOAA/NWS
+    product_family: National Digital Forecast Database
+    historical_access: noaa-ndfd-pds archived WMO/GRIB2 objects
+    live_access: noaa-ndfd-pds operational objects / NDFD operational service
+    parity_status: approved
+    production_use: true
+    required_variables:
+      - maximum_temperature
+      - temperature
+      - dew_point
+      - sky_cover
+      - precipitation_probability
+      - wind
+    caveat: Historical extraction must preserve original issue/update time and use only forecasts available by prediction_time.
+
+  nbm:
+    role: blended_model_guidance
+    producer: NOAA/NWS/NCEP MDL
+    product_family: National Blend of Models operational GRIB2
+    historical_access: noaa-nbm-grib2-pds dated operational archive
+    live_access: noaa-nbm-grib2-pds current hourly operational cycles
+    parity_status: approved_where_archived
+    production_use: true
+    archive_start_note: Useful public operational archive is materially shorter than NDFD/HRRR; do not backfill with retrospective NBM substitutes.
+
+  hrrr:
+    role: high_resolution_model_guidance
+    producer: NOAA/NWS/NCEP
+    product_family: High-Resolution Rapid Refresh operational surface GRIB2
+    historical_access: noaa-hrrr-bdp-pds archive
+    live_access: noaa-hrrr-bdp-pds/NCEP current hourly operational cycles
+    parity_status: approved
+    production_use: true
+    caveat: Model version changes must be retained as provenance; do not homogenize historical cycles into a modern retrospective rerun.
+
+  nws_cli_legacy:
+    role: settlement_label_legacy
+    producer: NOAA/NWS
+    product_family: Climatological Report Daily (CLI)
+    historical_access: IEM parsed archived NWS CLI products
+    live_access: NWS CLI product
+    parity_status: legacy_regime_only
+    production_use: false
+    valid_through: 2026-08-13
+    caveat: Kalshi switched daily temperature settlement to The Weather Company effective 2026-08-14.
+
+  twc_kalshi_settlement:
+    role: settlement_label_current
+    producer: The Weather Company
+    product_family: Kalshi Daily Climate Report
+    historical_access: not_yet_verified
+    live_access: weather.com/kalshi
+    parity_status: current_live_only_until_history_verified
+    production_use: true
+    valid_from: 2026-08-14
+    caveat: Do not silently substitute NWS CLI as an identical current-regime target. Keep legacy/proxy labels separate until TWC historical equivalence is established.
+
+  open_meteo:
+    role: auxiliary_research
+    producer: Open-Meteo
+    product_family: historical/forecast APIs
+    historical_access: Open-Meteo
+    live_access: Open-Meteo
+    parity_status: excluded_from_production
+    production_use: false
+    caveat: Retain only for diagnostics or comparisons; not part of the settlement-aligned live-trading feature contract.
