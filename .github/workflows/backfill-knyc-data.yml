@@ -7,10 +7,12 @@ on:
       - data/settlement-aligned-8y
     paths:
       - scripts/backfill_knyc_iem.py
+      - scripts/validate_knyc_settlement_sources.py
       - .github/workflows/backfill-knyc-data.yml
   pull_request:
     paths:
       - scripts/backfill_knyc_iem.py
+      - scripts/validate_knyc_settlement_sources.py
       - .github/workflows/backfill-knyc-data.yml
 
 permissions:
@@ -39,8 +41,13 @@ jobs:
             --start-date 2018-01-01 \
             --end-date "$(date -u +%F)"
 
-      - name: Show coverage
-        run: cat outputs/data/knyc_backfill_coverage.json
+      - name: Validate CLI against existing NCEI TMAX overlap
+        run: python scripts/validate_knyc_settlement_sources.py
+
+      - name: Show coverage and validation
+        run: |
+          cat outputs/data/knyc_backfill_coverage.json
+          cat outputs/data/knyc_cli_vs_ncei_validation.json
 
       - name: Commit compact historical outputs
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -49,7 +56,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/raw/NYC_nws_hourly_2018_2026.csv \
                   data/processed/knyc_cli_daily_2018_2026.csv \
-                  outputs/data/knyc_backfill_coverage.json
+                  outputs/data/knyc_backfill_coverage.json \
+                  outputs/data/knyc_cli_vs_ncei_validation.json \
+                  outputs/data/knyc_cli_vs_ncei_mismatches.csv
           if git diff --cached --quiet; then
             echo "No data changes to commit"
           else
