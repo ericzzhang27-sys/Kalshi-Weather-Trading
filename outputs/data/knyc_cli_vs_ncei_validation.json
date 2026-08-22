@@ -1,0 +1,12 @@
+{
+  "overlap_rows": 1613,
+  "overlap_start": "2022-01-01",
+  "overlap_end": "2026-06-03",
+  "exact_match_rows": 1607,
+  "exact_match_fraction": 0.99628,
+  "mismatch_rows": 6,
+  "mean_difference_f": -0.00124,
+  "mean_absolute_difference_f": 0.00372,
+  "max_absolute_difference_f": 1.0,
+  "interpretation": "CLI is the NWS daily climate-report value historically relevant to Kalshi settlement; NCEI TMAX is used here as an independent overlap check, not assumed identical a priori."
+}

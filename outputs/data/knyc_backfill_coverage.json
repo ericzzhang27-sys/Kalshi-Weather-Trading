@@ -1,0 +1,26 @@
+{
+  "generated_at_utc": "2026-08-22T17:04:56+00:00",
+  "requested_start": "2018-01-01",
+  "requested_end": "2026-08-22",
+  "expected_days": 3156,
+  "asos_rows": 97261,
+  "asos_first_utc": "2018-01-01 00:51:00+00:00",
+  "asos_last_utc": "2026-08-22 16:51:00+00:00",
+  "asos_unique_local_dates": 3157,
+  "cli_rows": 3153,
+  "cli_first_date": "2018-01-01",
+  "cli_last_date": "2026-08-21",
+  "cli_day_coverage_fraction": 0.999049,
+  "cli_missing_date_count": 3,
+  "cli_missing_dates": [
+    "2025-06-02",
+    "2025-06-03",
+    "2026-08-22"
+  ],
+  "notes": [
+    "IEM ASOS is an observation archive; it is not the final settlement label.",
+    "IEM CLI rows are parsed from NWS Daily Climate Report text products and are the preferred historical settlement proxy for the former NWS-CLI Kalshi regime.",
+    "The CLI output is shaped to the project's existing daily-target audit contract: actual_high, official_daily_high_f, actual_source, station, and source metadata.",
+    "Post-provider-change 2026 rows should be cross-checked against The Weather Company before treating CLI as exact settlement truth."
+  ]
+}
