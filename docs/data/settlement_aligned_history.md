@@ -11,6 +11,8 @@ This branch extends the NYC weather dataset toward a settlement-aligned 2018-pre
 | NOAA/NWS NDFD MaxT | existing archive/fetcher | Timestamp-safe official forecast-high anchor |
 | NCEI Central Park (`USW00094728`) | existing 2022+ file | Independent overlap validation for daily TMAX |
 
+The IEM downloads are executed in year-sized requests. This deliberately respects the ASOS service throttle and avoids unnecessarily hammering the public archive.
+
 The backfill command is:
 
 ```bash
