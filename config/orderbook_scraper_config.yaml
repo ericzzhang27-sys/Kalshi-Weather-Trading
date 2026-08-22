@@ -1,0 +1,24 @@
+# Hourly Kalshi orderbook scraper for NYC daily-high temperature markets.
+#
+# Kalshi client + market discovery settings (series tickers, location terms,
+# eligibility) are reused from config/trading_config.yaml. This file controls
+# only scraping cadence, storage, and request pacing.
+
+storage_dir: data/raw/kalshi_orderbooks
+
+# Scrape every hour, aligned to the top of the hour (UTC) when running with
+# --loop so snapshots land on consistent timestamps for backtesting.
+interval_minutes: 60
+align_to_hour: true
+
+# Full order book depth requested from GET /markets/{ticker}/orderbook.
+orderbook_depth: 20
+
+# Pause between per-market orderbook requests to stay well under rate limits.
+request_pause_seconds: 0.25
+
+# By default only eligible markets (open, not too close to close) are scraped.
+include_ineligible_markets: false
+
+# Safety cap on markets scraped per cycle.
+max_markets_per_cycle: 100
