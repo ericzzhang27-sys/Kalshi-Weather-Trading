@@ -69,9 +69,12 @@ def clean_vintages(frame: pd.DataFrame) -> pd.DataFrame:
     if clean.empty:
         raise ValueError("All NDFD vintage rows were invalid after cleaning")
 
-    leakage = clean["forecast_issue_time"] > clean["ndfd_valid_time_utc"]
-    if leakage.any():
-        raise ValueError(f"{int(leakage.sum())} NDFD rows have issue time after valid time")
+    # NDFD MaxT valid_time is the GRIB maximum-period coordinate, not the
+    # dissemination timestamp. Same-day updates can legitimately be issued
+    # after that nominal period coordinate. Leakage is therefore enforced
+    # against prediction_timestamp in build_hourly_asof(), not against
+    # ndfd_valid_time_utc here.
+    clean["ndfd_issue_after_valid_time"] = clean["forecast_issue_time"] > clean["ndfd_valid_time_utc"]
 
     clean["ndfd_wmo_header"] = clean["ndfd_wmo_header"].astype(str).str.upper()
     bad_header = clean["ndfd_wmo_header"].ne("YGUZ98")
@@ -127,6 +130,7 @@ def build_hourly_asof(
             group["ndfd_archive_root"] = pd.NA
             group["ndfd_archive_host"] = pd.NA
             group["ndfd_source_file"] = pd.NA
+            group["ndfd_issue_after_valid_time"] = pd.NA
             outputs.append(group)
             continue
 
@@ -144,6 +148,7 @@ def build_hourly_asof(
             "ndfd_archive_root",
             "ndfd_archive_host",
             "ndfd_source_file",
+            "ndfd_issue_after_valid_time",
         ]
         keep_columns = [column for column in keep_columns if column in right_group.columns]
         merged = pd.merge_asof(
@@ -213,6 +218,7 @@ def coverage_report(
     total_hourly = int(len(hourly))
     issue_times = pd.to_datetime(vintages["forecast_issue_time"], utc=True)
     target_dates = pd.to_datetime(vintages["date"])
+    issue_after_valid = int(vintages.get("ndfd_issue_after_valid_time", pd.Series(dtype=bool)).fillna(False).sum())
     return {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "vintage_rows": int(len(vintages)),
@@ -228,6 +234,7 @@ def coverage_report(
         "hourly_decision_rows": total_hourly,
         "hourly_rows_with_ndfd_asof": usable_hourly,
         "hourly_asof_coverage_fraction": usable_hourly / total_hourly if total_hourly else 0.0,
+        "issue_after_nominal_valid_time_rows": issue_after_valid,
         "wmo_headers": sorted(vintages["ndfd_wmo_header"].dropna().astype(str).unique().tolist()),
         "archive_roots": sorted(vintages.get("ndfd_archive_root", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()),
         "overlap_validation": overlap,
