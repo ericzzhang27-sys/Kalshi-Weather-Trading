@@ -1,12 +1,7 @@
 # Orderbook Scraper Quality Report
 
-<<<<<<< HEAD
-- Cycle ID: `20260823T222532Z`
-- Fetched at: `2026-08-23T22:25:32.179217+00:00`
-=======
 - Cycle ID: `20260823T222827Z`
 - Fetched at: `2026-08-23T22:28:27.170037+00:00`
->>>>>>> origin/main
 - Status: **OK**
 - Markets matched: 12
 - Markets scraped: 12
