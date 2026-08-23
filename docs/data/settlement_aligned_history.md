@@ -39,15 +39,18 @@ Online NCEI THREDDS coverage is split across two archive roots:
 - `model-ndfd-file_kwbn-old`: legacy operational archive from June 2018 through May 2020.
 - `model-ndfd-file`: June 2020 onward.
 
-`script/backfill_ndfd_hourly_vintages.py` discovers every real `YGUZ98` update and uses the NCEI NetCDF Subset Service to request only the Central Park point instead of downloading the full CONUS GRIB. It preserves original file issue time, MaxT valid time, grid coordinates, archive root, WMO header, and source file.
+`scripts/backfill_ndfd_hourly_vintages.py` discovers every real `YGUZ98` update and uses the NCEI NetCDF Subset Service to request only the Central Park point instead of downloading the full CONUS GRIB. It preserves original file issue time, MaxT valid time, grid coordinates, archive root, WMO header, and source file.
 
 The archive is intentionally not interpolated to manufacture forecasts. `scripts/merge_ndfd_hourly_vintages.py` builds one decision row per local clock hour by selecting only the latest real NDFD vintage with `forecast_issue_time <= prediction_timestamp`. The resulting hourly replay is therefore a record of what a live process could actually have known at that hour.
 
-The intended final outputs are:
+The final forecast/replay outputs are:
 
-- `data/processed/ndfd_knyc_daily_high_forecasts.csv`: all retained operational MaxT vintages, June 2018-present.
+- `data/processed/ndfd_knyc_daily_high_forecasts.csv`: compact canonical operational MaxT vintage table, June 2018-present.
+- `data/processed/ndfd_knyc_daily_high_forecasts_2018_2026.csv`: explicit versioned copy of the same compact vintage history.
 - `data/processed/ndfd_knyc_hourly_asof_forecasts_2018_2026.csv`: hourly decision snapshots carrying forward only the latest already-issued forecast.
+- `data/processed/production_replay_base_2018_2026.csv`: hourly NDFD as-of forecast joined to only already-observed KNYC ASOS data plus the final daily target/audit fields.
 - `outputs/data/ndfd_hourly_vintage_coverage.json`: coverage, update-frequency, and overlap-validation audit.
+- `outputs/data/production_replay_base_coverage.json`: combined replay coverage and target-regime audit.
 
 Forecast vintage rows must preserve source provenance and must never have an issue timestamp after the corresponding prediction timestamp. Older data is not treated as interchangeable solely because it is NOAA/NWS; WMO header, product, location mapping, units, and time semantics are validated explicitly.
 
@@ -59,7 +62,7 @@ The processed CLI table deliberately includes the project's canonical target/aud
 
 The ASOS archive is used only for information that was observable by a prediction timestamp. It must not be used to reconstruct future portions of a target day's path.
 
-For the post-provider-change 2026 regime, NWS CLI remains a useful cross-check but should not be assumed to equal the final Kalshi settlement value without comparing it to the applicable The Weather Company report.
+For the post-provider-change 2026 regime, NWS CLI remains a useful cross-check but should not be assumed to equal the final Kalshi settlement value without comparing it to the applicable The Weather Company report. `production_replay_base_2018_2026.csv` therefore marks post-2026-08-13 CLI targets as TWC-regime proxies and excludes them from exact-regime training eligibility.
 
 ## Next forecast-history additions
 
