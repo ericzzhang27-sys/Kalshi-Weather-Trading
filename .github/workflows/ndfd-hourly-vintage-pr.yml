@@ -1,10 +1,11 @@
-name: Validate NDFD hourly vintage backfill PR
+name: Build NDFD hourly vintage dataset
 
 on:
   pull_request:
     paths:
       - scripts/backfill_ndfd_hourly_vintages.py
       - scripts/merge_ndfd_hourly_vintages.py
+      - scripts/build_production_replay_base.py
       - .github/workflows/ndfd-hourly-vintage-backfill.yml
       - docs/data/settlement_aligned_history.md
 
@@ -12,10 +13,80 @@ permissions:
   contents: write
 
 jobs:
-  legacy-smoke:
+  extract:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - label: 2018
+            start: 2018-06-01
+            end: 2018-12-31
+          - label: 2019
+            start: 2019-01-01
+            end: 2019-12-31
+          - label: 2020
+            start: 2020-01-01
+            end: 2020-12-31
+          - label: 2021
+            start: 2021-01-01
+            end: 2021-12-31
+          - label: 2022
+            start: 2022-01-01
+            end: 2022-12-31
+          - label: 2023
+            start: 2023-01-01
+            end: 2023-12-31
+          - label: 2024
+            start: 2024-01-01
+            end: 2024-12-31
+          - label: 2025
+            start: 2025-01-01
+            end: 2025-12-31
+          - label: 2026
+            start: 2026-01-01
+            end: 2026-12-31
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pandas==2.3.3 requests==2.32.5
+
+      - name: Extract operational NDFD MaxT vintages
+        run: |
+          python scripts/backfill_ndfd_hourly_vintages.py \
+            --start-date "${{ matrix.start }}" \
+            --end-date "${{ matrix.end }}" \
+            --workers 4 \
+            --progress-every-days 20 \
+            --output "outputs/data/ndfd_vintages_${{ matrix.label }}.csv" \
+            --report-output "outputs/data/ndfd_report_${{ matrix.label }}.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ndfd-year-${{ matrix.label }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
+          path: |
+            outputs/data/ndfd_vintages_${{ matrix.label }}.csv
+            outputs/data/ndfd_report_${{ matrix.label }}.json
+
+  merge:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    needs: extract
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,42 +98,89 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install pandas==2.3.3 requests==2.32.5
+        run: pip install pandas==2.3.3
 
-      - name: Extract legacy NDFD smoke range
-        run: |
-          python scripts/backfill_ndfd_hourly_vintages.py \
-            --start-date 2018-06-20 \
-            --end-date 2018-06-21 \
-            --workers 4 \
-            --progress-every-days 1 \
-            --output outputs/data/ndfd_legacy_smoke.csv \
-            --report-output outputs/data/ndfd_legacy_smoke_report.json
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ndfd-year-*
+          path: outputs/yearly
+          merge-multiple: true
 
-      - name: Build hourly as-of replay
+      - name: Merge vintages and build hourly replay
         run: |
           python scripts/merge_ndfd_hourly_vintages.py \
-            outputs/data/ndfd_legacy_smoke.csv \
-            --vintage-output outputs/data/ndfd_legacy_smoke_merged.csv \
-            --hourly-output outputs/data/ndfd_legacy_smoke_hourly.csv \
-            --coverage-output outputs/data/ndfd_legacy_smoke_coverage.json \
-            --minimum-hourly-coverage 0.50
+            outputs/yearly/ndfd_vintages_*.csv \
+            --vintage-output outputs/data/ndfd_knyc_all_vintages_2018_2026.csv \
+            --hourly-output data/processed/ndfd_knyc_hourly_asof_forecasts_2018_2026.csv \
+            --coverage-output outputs/data/ndfd_hourly_vintage_coverage.json \
+            --reference data/processed/ndfd_knyc_daily_high_forecasts.csv \
+            --minimum-hourly-coverage 0.95
 
-      - name: Show validation output
+      - name: Write compact canonical NDFD vintage table
         run: |
-          cat outputs/data/ndfd_legacy_smoke_report.json
-          cat outputs/data/ndfd_legacy_smoke_coverage.json
-          head -20 outputs/data/ndfd_legacy_smoke.csv
-          head -30 outputs/data/ndfd_legacy_smoke_hourly.csv
+          python - <<'PY'
+          import pandas as pd
+          src = "outputs/data/ndfd_knyc_all_vintages_2018_2026.csv"
+          out = "data/processed/ndfd_knyc_daily_high_forecasts_2018_2026.csv"
+          canonical = "data/processed/ndfd_knyc_daily_high_forecasts.csv"
+          df = pd.read_csv(src)
+          keep = [
+              "date", "location", "forecast_high", "forecast_source",
+              "forecast_issue_time", "nws_forecast_high_f", "ndfd_valid_time_utc",
+              "ndfd_lead_hours", "ndfd_grid_lat", "ndfd_grid_lon",
+              "ndfd_grid_distance_km", "ndfd_wmo_header", "ndfd_center",
+              "ndfd_archive_root", "ndfd_archive_host", "ndfd_source_file",
+              "ndfd_issue_after_valid_time",
+          ]
+          keep = [c for c in keep if c in df.columns]
+          compact = df.loc[:, keep].copy()
+          compact.to_csv(out, index=False)
+          compact.to_csv(canonical, index=False)
+          print(f"compact vintage rows={len(compact):,}, columns={len(compact.columns)}")
+          PY
+
+      - name: Build combined production-replay base dataset
+        run: |
+          python scripts/build_production_replay_base.py \
+            --ndfd data/processed/ndfd_knyc_hourly_asof_forecasts_2018_2026.csv \
+            --asos data/raw/NYC_nws_hourly_2018_2026.csv \
+            --cli data/processed/knyc_cli_daily_2018_2026.csv \
+            --output data/processed/production_replay_base_2018_2026.csv \
+            --report-output outputs/data/production_replay_base_coverage.json
+
+      - name: Show final validation reports
+        run: |
+          cat outputs/data/ndfd_hourly_vintage_coverage.json
+          cat outputs/data/production_replay_base_coverage.json
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ndfd-legacy-smoke
+          name: Kalshi_NYC_production_replay_2018_2026
           if-no-files-found: error
           retention-days: 7
+          compression-level: 6
           path: |
-            outputs/data/ndfd_legacy_smoke.csv
-            outputs/data/ndfd_legacy_smoke_report.json
-            outputs/data/ndfd_legacy_smoke_merged.csv
-            outputs/data/ndfd_legacy_smoke_hourly.csv
-            outputs/data/ndfd_legacy_smoke_coverage.json
+            data/processed/ndfd_knyc_daily_high_forecasts_2018_2026.csv
+            data/processed/ndfd_knyc_hourly_asof_forecasts_2018_2026.csv
+            data/processed/production_replay_base_2018_2026.csv
+            outputs/data/ndfd_hourly_vintage_coverage.json
+            outputs/data/production_replay_base_coverage.json
+            outputs/data/ndfd_report_*.json
+
+      - name: Commit validated compact outputs to PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
+          git add \
+            data/processed/ndfd_knyc_daily_high_forecasts.csv \
+            data/processed/ndfd_knyc_daily_high_forecasts_2018_2026.csv \
+            data/processed/ndfd_knyc_hourly_asof_forecasts_2018_2026.csv \
+            data/processed/production_replay_base_2018_2026.csv \
+            outputs/data/ndfd_hourly_vintage_coverage.json \
+            outputs/data/production_replay_base_coverage.json
+          if git diff --cached --quiet; then
+            echo "No generated data changes"
+          else
+            git commit -m "Build NDFD hourly replay dataset 2018-2026 [skip ci]"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
