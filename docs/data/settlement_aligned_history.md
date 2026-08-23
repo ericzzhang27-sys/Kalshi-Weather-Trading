@@ -8,19 +8,19 @@ This branch extends the NYC weather dataset toward a settlement-aligned 2018-pre
 |---|---:|---|
 | IEM parsed NWS CLI (`KNYC`) | 2018-present | Historical daily-high settlement proxy and audit trail |
 | IEM ASOS/METAR (`NYC` / KNYC) | 2018-present | Timestamped intraday observation path |
-| NOAA/NWS NDFD MaxT | existing archive/fetcher | Timestamp-safe official forecast-high anchor |
+| NOAA/NWS NDFD MaxT | June 2018-present online archive | Timestamp-safe official forecast-high vintages |
 | NCEI Central Park (`USW00094728`) | existing 2022+ file | Independent overlap validation for daily TMAX |
 
 The IEM downloads are executed in year-sized requests. This deliberately respects the ASOS service throttle and avoids unnecessarily hammering the public archive.
 
-The backfill command is:
+The observation/target backfill command is:
 
 ```bash
 python scripts/backfill_knyc_iem.py --start-date 2018-01-01 --end-date 2026-08-22
 python scripts/validate_knyc_settlement_sources.py
 ```
 
-Generated outputs:
+Generated observation/target outputs:
 
 - `data/raw/NYC_nws_hourly_2018_2026.csv`
 - `data/processed/knyc_cli_daily_2018_2026.csv`
@@ -29,6 +29,27 @@ Generated outputs:
 - `outputs/data/knyc_cli_vs_ncei_mismatches.csv`
 
 These generated outputs are also packaged by the PR validation workflow for reproducible handoff without modifying the underlying CSV contents.
+
+## NDFD point-in-time forecast history
+
+The forecast backfill uses actual operational NDFD `Daytime Maximum Temperature` vintages rather than reconstructed forecasts. The production contract is fixed to WMO header `YGUZ98`, center `KWBN`, and the Central Park point.
+
+Online NCEI THREDDS coverage is split across two archive roots:
+
+- `model-ndfd-file_kwbn-old`: legacy operational archive from June 2018 through May 2020.
+- `model-ndfd-file`: June 2020 onward.
+
+`script/backfill_ndfd_hourly_vintages.py` discovers every real `YGUZ98` update and uses the NCEI NetCDF Subset Service to request only the Central Park point instead of downloading the full CONUS GRIB. It preserves original file issue time, MaxT valid time, grid coordinates, archive root, WMO header, and source file.
+
+The archive is intentionally not interpolated to manufacture forecasts. `scripts/merge_ndfd_hourly_vintages.py` builds one decision row per local clock hour by selecting only the latest real NDFD vintage with `forecast_issue_time <= prediction_timestamp`. The resulting hourly replay is therefore a record of what a live process could actually have known at that hour.
+
+The intended final outputs are:
+
+- `data/processed/ndfd_knyc_daily_high_forecasts.csv`: all retained operational MaxT vintages, June 2018-present.
+- `data/processed/ndfd_knyc_hourly_asof_forecasts_2018_2026.csv`: hourly decision snapshots carrying forward only the latest already-issued forecast.
+- `outputs/data/ndfd_hourly_vintage_coverage.json`: coverage, update-frequency, and overlap-validation audit.
+
+Forecast vintage rows must preserve source provenance and must never have an issue timestamp after the corresponding prediction timestamp. Older data is not treated as interchangeable solely because it is NOAA/NWS; WMO header, product, location mapping, units, and time semantics are validated explicitly.
 
 ## Important interpretation
 
@@ -42,4 +63,4 @@ For the post-provider-change 2026 regime, NWS CLI remains a useful cross-check b
 
 ## Next forecast-history additions
 
-The existing NDFD point-forecast builder should be backfilled separately because multi-year GRIB retrieval is much heavier than the ASOS/CLI downloads. HRRR can provide additional model guidance for the full 2018-present window, while useful NBM public archival coverage is shorter. Raw GRIB archives should not be committed; only extracted Central Park point/feature tables belong in Git.
+After NDFD is validated and merged, add production-parity sources such as LAMP/MOS, NBM, HRRR, and nearby ASOS stations. Raw large model archives should not be committed; only extracted timestamped point/feature tables belong in Git.
