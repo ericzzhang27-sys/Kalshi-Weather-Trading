@@ -1,0 +1,68 @@
+name: Validate NDFD hourly vintage backfill PR
+
+on:
+  pull_request:
+    paths:
+      - scripts/backfill_ndfd_hourly_vintages.py
+      - scripts/merge_ndfd_hourly_vintages.py
+      - .github/workflows/ndfd-hourly-vintage-backfill.yml
+      - docs/data/settlement_aligned_history.md
+
+permissions:
+  contents: write
+
+jobs:
+  legacy-smoke:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pandas==2.3.3 requests==2.32.5
+
+      - name: Extract legacy NDFD smoke range
+        run: |
+          python scripts/backfill_ndfd_hourly_vintages.py \
+            --start-date 2018-06-20 \
+            --end-date 2018-06-21 \
+            --workers 4 \
+            --progress-every-days 1 \
+            --output outputs/data/ndfd_legacy_smoke.csv \
+            --report-output outputs/data/ndfd_legacy_smoke_report.json
+
+      - name: Build hourly as-of replay
+        run: |
+          python scripts/merge_ndfd_hourly_vintages.py \
+            outputs/data/ndfd_legacy_smoke.csv \
+            --vintage-output outputs/data/ndfd_legacy_smoke_merged.csv \
+            --hourly-output outputs/data/ndfd_legacy_smoke_hourly.csv \
+            --coverage-output outputs/data/ndfd_legacy_smoke_coverage.json \
+            --minimum-hourly-coverage 0.50
+
+      - name: Show validation output
+        run: |
+          cat outputs/data/ndfd_legacy_smoke_report.json
+          cat outputs/data/ndfd_legacy_smoke_coverage.json
+          head -20 outputs/data/ndfd_legacy_smoke.csv
+          head -30 outputs/data/ndfd_legacy_smoke_hourly.csv
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ndfd-legacy-smoke
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            outputs/data/ndfd_legacy_smoke.csv
+            outputs/data/ndfd_legacy_smoke_report.json
+            outputs/data/ndfd_legacy_smoke_merged.csv
+            outputs/data/ndfd_legacy_smoke_hourly.csv
+            outputs/data/ndfd_legacy_smoke_coverage.json
