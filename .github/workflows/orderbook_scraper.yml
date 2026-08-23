@@ -44,18 +44,31 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
+        # Must cover every third-party import reachable from
+        # scripts/run_orderbook_scraper.py: requests/yaml/pandas in the scraper,
+        # matplotlib + numpy via src.distribution_pricing / src.predict_distribution,
+        # scipy via src.distributional_model (all pulled in by src.trading's
+        # package __init__), and cryptography for the Kalshi client's request
+        # signing. Missing packages here crash the cycle at import time -
+        # silently, if the failure-masking removed below were still in place.
         run: |
           python -m pip install --upgrade pip
-          pip install requests pyyaml pandas
+          pip install requests pyyaml pandas numpy scipy scikit-learn matplotlib cryptography
+
+      - name: Record baseline scrape log size
+        id: baseline
+        run: echo "log_lines=$(wc -l < data/raw/kalshi_orderbooks/scrape_log.csv)" >> "$GITHUB_OUTPUT"
 
       - name: Run one scrape cycle
-        # A FAIL validation exits 1 but still quarantines the cycle on disk;
-        # we continue so the quarantine + log are committed for inspection.
-        run: |
-          python scripts/run_orderbook_scraper.py || \
-            echo "::warning::cycle ended non-zero (check scrape_log.csv / quarantine/)"
+        id: scrape
+        # A FAIL validation exits 1 but still quarantines the cycle on disk and
+        # appends its scrape_log.csv row; we continue so that evidence is
+        # committed, then fail the job below so the breakage is visible.
+        continue-on-error: true
+        run: python scripts/run_orderbook_scraper.py
 
       - name: Commit collected data
+        if: always()
         run: |
           git config user.name "orderbook-scraper-bot"
           git config user.email "actions@users.noreply.github.com"
@@ -66,4 +79,23 @@ jobs:
             git commit -m "orderbook data: $(date -u +%Y-%m-%dT%H:%MZ)"
             git pull --rebase origin main
             git push
+          fi
+
+      - name: Verify cycle produced data
+        # Every completed cycle (OK/WARN/FAIL) appends exactly one row to
+        # scrape_log.csv. If the log did not grow, the scraper crashed before it
+        # could log anything (e.g. missing dependency, network/auth setup
+        # error) - fail loudly instead of leaving a green no-op run.
+        if: always()
+        run: |
+          now=$(wc -l < data/raw/kalshi_orderbooks/scrape_log.csv)
+          base=${{ steps.baseline.outputs.log_lines }}
+          echo "scrape_log.csv lines: baseline=${base} now=${now}"
+          if [ "$now" -le "$base" ]; then
+            echo "::error::scrape_log.csv did not grow this cycle (baseline=${base}, now=${now}) - the scraper crashed before logging. Check the 'Run one scrape cycle' step output."
+            exit 1
+          fi
+          if [ "${{ steps.scrape.outcome }}" != "success" ]; then
+            echo "::error::cycle ended non-zero (quarantine + log row committed for inspection)."
+            exit 1
           fi
