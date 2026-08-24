@@ -1,20 +1,21 @@
 {
-  "generated_at_utc": "2026-08-23T23:24:09+00:00",
+  "generated_at_utc": "2026-08-24T16:54:07+00:00",
   "requested_start": "2018-01-01",
-  "requested_end": "2026-08-23",
-  "expected_days": 3157,
-  "asos_rows": 97302,
+  "requested_end": "2026-08-24",
+  "expected_days": 3158,
+  "asos_rows": 97329,
   "asos_first_utc": "2018-01-01 00:51:00+00:00",
-  "asos_last_utc": "2026-08-23 22:51:00+00:00",
-  "asos_unique_local_dates": 3158,
+  "asos_last_utc": "2026-08-24 15:51:00+00:00",
+  "asos_unique_local_dates": 3159,
   "cli_rows": 3155,
   "cli_first_date": "2018-01-01",
   "cli_last_date": "2026-08-23",
-  "cli_day_coverage_fraction": 0.999366,
-  "cli_missing_date_count": 2,
+  "cli_day_coverage_fraction": 0.99905,
+  "cli_missing_date_count": 3,
   "cli_missing_dates": [
     "2025-06-02",
-    "2025-06-03"
+    "2025-06-03",
+    "2026-08-24"
   ],
   "notes": [
     "IEM ASOS is an observation archive; it is not the final settlement label.",
