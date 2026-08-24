@@ -2,6 +2,8 @@
 
 This branch extends the NYC weather dataset toward a settlement-aligned 2018-present history.
 
+The full June-2018-through-present NDFD matrix build is triggered by normal (non-`[skip ci]`) branch updates and commits validated compact outputs back to this branch only after coverage checks pass.
+
 ## Sources
 
 | Source | Intended coverage | Role |
