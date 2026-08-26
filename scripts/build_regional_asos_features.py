@@ -82,8 +82,17 @@ def station_table(df: pd.DataFrame, p: str) -> pd.DataFrame:
 
 
 def build_hourly(raw: dict[str, pd.DataFrame], start: date, end: date, tolerance_min: int) -> pd.DataFrame:
-    end_hour = pd.Timestamp(end + timedelta(days=1), tz="UTC") - pd.Timedelta(hours=1)
-    out = pd.DataFrame({"prediction_time_utc": pd.date_range(pd.Timestamp(start, tz="UTC"), end_hour, freq="h")})
+    tz = "America/New_York"
+    start_hour = pd.Timestamp(start).tz_localize(tz).tz_convert("UTC")
+    requested_end = (
+        pd.Timestamp(end + timedelta(days=1)).tz_localize(tz).tz_convert("UTC")
+        - pd.Timedelta(hours=1)
+    )
+    now_hour = pd.Timestamp.now(tz="UTC").floor("h")
+    end_hour = min(requested_end, now_hour)
+    if end_hour < start_hour:
+        raise ValueError("Requested range has no elapsed hourly prediction timestamps")
+    out = pd.DataFrame({"prediction_time_utc": pd.date_range(start_hour, end_hour, freq="h")})
     for p, df in raw.items():
         t = station_table(df, p).sort_values(f"{p}_observation_time_utc")
         out = pd.merge_asof(
@@ -145,10 +154,14 @@ def engineer(df: pd.DataFrame) -> pd.DataFrame:
 def report(x: pd.DataFrame, raw: pd.DataFrame, start: date, end: date, tol: int) -> dict:
     return {
         "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
-        "requested_start": start.isoformat(), "requested_end": end.isoformat(),
-        "hourly_rows": len(x), "raw_observation_rows": len(raw),
+        "requested_start_local_date": start.isoformat(),
+        "requested_end_local_date": end.isoformat(),
+        "hourly_rows": len(x),
+        "raw_observation_rows": len(raw),
         "first_prediction_time_utc": str(x.prediction_time_utc.min()),
         "last_prediction_time_utc": str(x.prediction_time_utc.max()),
+        "first_prediction_time_local": str(x.prediction_time_local.min()),
+        "last_prediction_time_local": str(x.prediction_time_local.max()),
         "all_four_station_temp_fraction": round(float((x.regional_station_count_available == 4).mean()), 6),
         "at_least_three_station_temp_fraction": round(float((x.regional_station_count_available >= 3).mean()), 6),
         "temperature_missing_fraction": {s: round(float(x[f"{s}_temp_f"].isna().mean()), 6) for s in STATIONS},
@@ -170,10 +183,15 @@ def main() -> None:
     p.add_argument("--report-output", type=Path, default=DEFAULT_REPORT)
     p.add_argument("--max-age-minutes", type=int, default=90)
     a = p.parse_args()
-    start, end = _date(a.start_date), _date(a.end_date)
+    start, requested_end = _date(a.start_date), _date(a.end_date)
+    current_local_date = pd.Timestamp.now(tz="America/New_York").date()
+    end = min(requested_end, current_local_date)
     if end < start or a.max_age_minutes <= 0:
         raise ValueError("Invalid date range or max age")
-    station_raw = {pfx: fetch_station(stn, start, end) for pfx, stn in STATIONS.items()}
+    # Fetch a one-day lookback so the first local-midnight row can use the latest
+    # observation that was already available before the requested start boundary.
+    fetch_start = start - timedelta(days=1)
+    station_raw = {pfx: fetch_station(stn, fetch_start, end) for pfx, stn in STATIONS.items()}
     raw = pd.concat([d.assign(station_key=pfx) for pfx, d in station_raw.items()], ignore_index=True)
     x = engineer(build_hourly(station_raw, start, end, a.max_age_minutes))
     for path in (a.output, a.raw_output, a.report_output):
