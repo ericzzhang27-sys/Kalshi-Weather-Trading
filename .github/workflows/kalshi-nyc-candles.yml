@@ -39,7 +39,7 @@ jobs:
 
       - name: Collect public Kalshi hourly candlesticks
         env:
-          KALSHI_WORKERS: "8"
+          KALSHI_WORKERS: "16"
         run: python scripts/collect_kalshi_nyc_hourly_candles.py
 
       - name: Package dataset
