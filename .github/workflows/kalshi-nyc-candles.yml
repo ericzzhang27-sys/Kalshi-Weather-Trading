@@ -1,6 +1,12 @@
 name: Aggregate Kalshi NYC hourly candles
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/collect_kalshi_nyc_hourly_candles.py
+      - .github/workflows/kalshi-nyc-candles.yml
   push:
     branches:
       - data/kalshi-nyc-candles
@@ -14,11 +20,13 @@ permissions:
 
 jobs:
   collect:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
           fetch-depth: 1
 
       - uses: actions/setup-python@v5
@@ -46,6 +54,7 @@ jobs:
           path: outputs/Kalshi_NYC_High_Hourly_Candles_2021_2026.zip
 
       - name: Commit compact manifest and coverage report
+        if: github.event_name == 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
@@ -54,5 +63,5 @@ jobs:
             echo "No manifest changes"
           else
             git commit -m "Record Kalshi NYC candle coverage [skip ci]"
-            git push origin HEAD:data/kalshi-nyc-candles
+            git push origin HEAD:${{ github.head_ref }}
           fi
