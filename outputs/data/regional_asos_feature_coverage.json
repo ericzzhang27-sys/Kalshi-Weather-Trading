@@ -1,18 +1,20 @@
 {
-  "generated_at_utc": "2026-08-26T14:17:07+00:00",
-  "requested_start": "2018-01-01",
-  "requested_end": "2026-08-26",
-  "hourly_rows": 75840,
-  "raw_observation_rows": 358847,
-  "first_prediction_time_utc": "2018-01-01 00:00:00+00:00",
-  "last_prediction_time_utc": "2026-08-26 23:00:00+00:00",
-  "all_four_station_temp_fraction": 0.996862,
-  "at_least_three_station_temp_fraction": 0.999763,
+  "generated_at_utc": "2026-08-26T14:25:19+00:00",
+  "requested_start_local_date": "2018-01-01",
+  "requested_end_local_date": "2026-08-26",
+  "hourly_rows": 75826,
+  "raw_observation_rows": 358943,
+  "first_prediction_time_utc": "2018-01-01 05:00:00+00:00",
+  "last_prediction_time_utc": "2026-08-26 14:00:00+00:00",
+  "first_prediction_time_local": "2018-01-01 00:00:00-05:00",
+  "last_prediction_time_local": "2026-08-26 10:00:00-04:00",
+  "all_four_station_temp_fraction": 0.99698,
+  "at_least_three_station_temp_fraction": 0.999881,
   "temperature_missing_fraction": {
-    "knyc": 0.002782,
-    "klga": 0.00033,
-    "kjfk": 0.000185,
-    "kewr": 0.000343
+    "knyc": 0.002664,
+    "klga": 0.000211,
+    "kjfk": 7.9e-05,
+    "kewr": 0.000224
   },
   "max_observation_age_minutes": 90,
   "stations": {
