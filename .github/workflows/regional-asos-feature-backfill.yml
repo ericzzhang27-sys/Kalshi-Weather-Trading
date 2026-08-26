@@ -1,0 +1,91 @@
+name: Build regional ASOS hourly feature dataset
+
+on:
+  push:
+    branches:
+      - official-feature-backfill-2018-2026
+    paths:
+      - scripts/build_regional_asos_features.py
+      - .github/workflows/regional-asos-feature-backfill.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: official-feature-backfill-2018-2026
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pandas==2.3.3 numpy==2.3.2 requests==2.32.5
+
+      - name: Backfill regional ASOS and build hourly as-of features
+        run: |
+          python -m scripts.build_regional_asos_features \
+            --start-date 2018-01-01 \
+            --end-date 2026-08-26 \
+            --max-age-minutes 90 \
+            --output data/processed/regional_asos_hourly_features_2018_2026.csv \
+            --raw-output outputs/data/regional_asos_observations_2018_2026.csv \
+            --report-output outputs/data/regional_asos_feature_coverage.json
+
+      - name: Validate timestamp safety and coverage
+        run: |
+          python - <<'PY'
+          import json
+          import pandas as pd
+
+          path = "data/processed/regional_asos_hourly_features_2018_2026.csv"
+          df = pd.read_csv(path)
+          pt = pd.to_datetime(df["prediction_time_utc"], utc=True, errors="raise")
+          assert pt.is_monotonic_increasing
+          assert not pt.duplicated().any()
+          expected = len(pd.date_range("2018-01-01T00:00:00Z", "2026-08-26T23:00:00Z", freq="h"))
+          assert len(df) == expected, (len(df), expected)
+          for station in ["knyc", "klga", "kjfk", "kewr"]:
+              ot = pd.to_datetime(df[f"{station}_observation_time_utc"], utc=True, errors="coerce")
+              bad = ot.notna() & (ot > pt)
+              assert not bad.any(), f"future {station} observations: {bad.sum()}"
+              age = pd.to_numeric(df[f"{station}_observation_age_min"], errors="coerce")
+              assert not (age.dropna() < 0).any()
+              assert not (age.dropna() > 90.0001).any()
+          assert (df["regional_station_count_available"] >= 3).mean() > 0.95
+          report = json.load(open("outputs/data/regional_asos_feature_coverage.json"))
+          print(json.dumps(report, indent=2))
+          print(f"validated rows={len(df):,} cols={len(df.columns):,}")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NYC_regional_ASOS_hourly_features_2018_2026
+          retention-days: 14
+          compression-level: 6
+          if-no-files-found: error
+          path: |
+            data/processed/regional_asos_hourly_features_2018_2026.csv
+            outputs/data/regional_asos_observations_2018_2026.csv
+            outputs/data/regional_asos_feature_coverage.json
+
+      - name: Commit compact validated dataset to branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
+          git add \
+            data/processed/regional_asos_hourly_features_2018_2026.csv \
+            outputs/data/regional_asos_feature_coverage.json
+          if git diff --cached --quiet; then
+            echo "No generated changes"
+          else
+            git commit -m "Build regional ASOS hourly features 2018-2026 [skip ci]"
+            git push origin HEAD:official-feature-backfill-2018-2026
+          fi
