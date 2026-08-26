@@ -66,3 +66,5 @@ jobs:
             git commit -m "Record Kalshi NYC candle coverage [skip ci]"
             git push origin HEAD:${{ github.head_ref }}
           fi
+
+# Triggered from a short-lived PR to materialize the public dataset artifact.
