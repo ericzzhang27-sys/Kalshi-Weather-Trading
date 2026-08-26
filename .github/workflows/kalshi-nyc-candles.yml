@@ -9,6 +9,7 @@ on:
       - .github/workflows/kalshi-nyc-candles.yml
   push:
     branches:
+      - main
       - data/kalshi-nyc-candles
     paths:
       - scripts/collect_kalshi_nyc_hourly_candles.py
