@@ -1,0 +1,35 @@
+# Funded prop-market account challenge - target rule set
+#
+# These parameters drive scripts/simulate_funded_challenge.py and any sizing
+# tuned for the challenge. They are BACKTEST/SIMULATION constraints only:
+# nothing in this file enables live trading (see trading_config.yaml, which
+# keeps mode: shadow / trading_enabled: false).
+
+account:
+  starting_balance: 25000.0
+
+rules:
+  # Profit objective: reach +10% of starting balance.
+  profit_target_pct: 0.10            # +$2,500 on $25k
+  # Hard fail if any single calendar day's realized P&L <= -5% of balance.
+  max_daily_loss_pct: 0.05           # -$1,250 on $25k
+  max_daily_loss_breach_action: fail # "fail" (hard disqualification) or "pause_day"
+  # Hard fail if equity falls >=10% below starting balance.
+  max_total_drawdown_pct: 0.10       # -$2,500 on $25k
+  drawdown_mode: static_from_initial # "static_from_initial" or "trailing_peak"
+  # Must trade at least this many days before the target counts as passed.
+  min_trading_days: 5
+  # Consistency/concentration: max notional in any ONE market at entry
+  # ("~10% from a market max", per user).
+  per_market_notional_cap_pct: 0.10  # $2,500 on $25k
+
+strategy_constraints:
+  # Entry cutoff inherited from the current production backtest config:
+  # no new entries at/after 4 PM ET (daily high effectively set by then).
+  entry_cutoff_hour_ny: 16
+  # Challenge has a 30-DAY TIME LIMIT (user-confirmed), so sizing must balance
+  # speed vs survival. Sweep results (scripts/simulate_funded_challenge.py,
+  # 21-trading-day window): 0.02 -> 31% pass (mostly timeouts, too slow),
+  # 0.03 -> 38% pass (best; zero loss-limit breaches historically),
+  # 0.05 -> 35% pass (drawdown failures appear). Recommend 0.03.
+  kelly_fraction: 0.03

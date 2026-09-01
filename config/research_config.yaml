@@ -1,0 +1,63 @@
+scope:
+  location: NYC
+  series: KXHIGHNY
+  settlement_station: KNYC
+  evidence_mode: historical_proxy
+
+champion:
+  authoritative_manifest: outputs/research/baseline/champion_manifest_v2.json
+  model_bundle: models/production_model_bundle.json
+  promotion: manual_transactional_only
+
+validation:
+  weather_minimum_training_days: 730
+  weather_outer_months: 6
+  inner_rolling_folds: 3
+  trading_warmup_event_days: 90
+  trading_outer_event_days: 90
+  purge_days: 1
+
+search:
+  engine: optuna_successive_halving
+  seed: 42
+  reduction_factor: 5
+  advance_fraction: 0.20
+  finalist_seeds: [42, 314, 2718]
+  maximum_ensemble_members: 3
+  model_family_order:
+    - seasonal_residual_and_dressed_guidance_baselines
+    - emos
+    - ngboost_distribution_families
+    - quantile_and_distributional_forests
+    - lightgbm_quantiles_and_ordinal_cdf
+    - intraday_exceedance_and_remaining_increase
+    - regime_mixtures
+    - small_distributional_neural_networks_if_justified
+    - linear_and_logarithmic_pools
+
+execution:
+  quote_rule: first_later_one_minute_executable_quote
+  maximum_gap_minutes: 5
+  contracts_for_signal_selection: 1
+  adverse_slippage_ticks: [1, 2]
+  hold_to_settlement: true
+  reentry: false
+  maker_models_enabled: false
+  historical_depth_available: false
+  evidence_label: historical_proxy_validated
+
+risk:
+  bankroll_dollars: 1000
+  kelly_fraction: 0.25
+  max_market_fraction: 0.005
+  max_event_fraction: 0.01
+  max_total_fraction: 0.05
+  daily_loss_stop_fraction: 0.02
+  max_top_book_depth_fraction: 0.10
+
+safety:
+  mode: shadow
+  trading_enabled: false
+  live_auto_enabled: false
+  sealed_forward_audit_start: 2026-09-01
+  paid_sources_enabled: false

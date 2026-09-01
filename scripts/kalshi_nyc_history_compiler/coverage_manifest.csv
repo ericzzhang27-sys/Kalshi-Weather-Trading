@@ -1,0 +1,8 @@
+item,value,notes
+earliest_verified_NYC_market,HIGHNY0-21JUL17-T90,Created 2021-07-16T13:43:19Z
+earliest_verified_market_open,2021-07-16T14:00:00Z,Trade extraction determines the actual first executed trade
+ticker_family_1,HIGHNY0,Early legacy NYC high-temperature market
+ticker_family_2,HIGHNY,Legacy NYC high-temperature market
+ticker_family_3,KXHIGHNY,Current NYC high-temperature market
+static_archive_global_span,2021-06 through 2026-01,TrevorJS/kalshi-trades
+incremental_extension,Kalshi historical + live API,Dynamic through runtime

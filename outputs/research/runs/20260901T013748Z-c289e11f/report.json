@@ -1,0 +1,294 @@
+{
+  "assumptions": {
+    "execution": "first later executable one-minute quote within five minutes; one contract",
+    "historical_depth": "unavailable; no executable-depth claim",
+    "live_trading": false,
+    "scope": "NYC KXHIGHNY only",
+    "selection": "whole event-day expanding folds with one-day purge"
+  },
+  "competence_gates": {
+    "checks": {
+      "bootstrap_net_pnl_lower": true,
+      "calibration_ece": false,
+      "calmar": true,
+      "coverage_80": true,
+      "coverage_90": true,
+      "deflated_sharpe_confidence": true,
+      "doubled_costs": true,
+      "drawdown": true,
+      "event_day_count": false,
+      "hybrid_skill_positive": false,
+      "pbo": true,
+      "profit_factor": true,
+      "rolling_folds": true,
+      "sharpe": true,
+      "sortino": true,
+      "trade_count": false,
+      "two_adverse_ticks": true,
+      "weather_log_loss_skill_positive": false,
+      "weather_log_loss_skill_statistically_positive": false,
+      "weather_rps_skill_positive": true,
+      "weather_rps_skill_statistically_positive": false
+    },
+    "failed_gates": [
+      "weather_log_loss_skill_positive",
+      "weather_log_loss_skill_statistically_positive",
+      "weather_rps_skill_statistically_positive",
+      "calibration_ece",
+      "hybrid_skill_positive",
+      "trade_count",
+      "event_day_count"
+    ],
+    "passed": false,
+    "promotion_decision": "retain_champion",
+    "thresholds": {
+      "maximum_coverage_error": 0.03,
+      "maximum_drawdown_fraction": 0.1,
+      "maximum_ece": 0.02,
+      "maximum_pbo": 0.2,
+      "minimum_bootstrap_pnl_lower": 0.0,
+      "minimum_calmar": 1.5,
+      "minimum_doubled_cost_pnl": 0.0,
+      "minimum_dsr_confidence": 0.95,
+      "minimum_event_days": 180,
+      "minimum_hybrid_skill": 0.0,
+      "minimum_log_loss_skill": 0.0,
+      "minimum_positive_fold_fraction": 0.75,
+      "minimum_profit_factor": 1.25,
+      "minimum_rps_skill": 0.0,
+      "minimum_sharpe": 1.5,
+      "minimum_sortino": 2.0,
+      "minimum_trades": 250,
+      "minimum_two_tick_pnl": 0.0
+    }
+  },
+  "evidence_label": "historical_proxy_validated",
+  "folds": [
+    {
+      "candidate_threshold_pnl": {
+        "0.01": 14.450000000000001,
+        "0.02": 12.879999999999999,
+        "0.03": 12.69,
+        "0.05": 12.610000000000001,
+        "0.075": 10.649999999999997,
+        "0.1": 9.16,
+        "0.15": 5.48
+      },
+      "cross_fitted_calibration_temperature": 0.7928374633176517,
+      "cross_fitted_coverage_tail_80": 0.20825,
+      "cross_fitted_coverage_tail_90": 0.10475,
+      "fold_id": "trading_outer_00",
+      "n_trades": 31,
+      "n_train_days": 90,
+      "n_validation_days": 90,
+      "net_pnl": 12.610000000000001,
+      "purge_dates": [
+        "2025-05-04"
+      ],
+      "selected_threshold_from_prior_folds": 0.05,
+      "train_end": "2025-05-02",
+      "train_start": "2025-01-02",
+      "validation_end": "2025-10-25",
+      "validation_start": "2025-05-05"
+    },
+    {
+      "candidate_threshold_pnl": {
+        "0.01": 9.799999999999999,
+        "0.02": 7.719999999999998,
+        "0.03": 7.269999999999999,
+        "0.05": 5.81,
+        "0.075": 5.059999999999999,
+        "0.1": 3.23,
+        "0.15": 3.3999999999999995
+      },
+      "cross_fitted_calibration_temperature": 0.8448840425892803,
+      "cross_fitted_coverage_tail_80": 0.2145,
+      "cross_fitted_coverage_tail_90": 0.10325000000000001,
+      "fold_id": "trading_outer_01",
+      "n_trades": 54,
+      "n_train_days": 180,
+      "n_validation_days": 90,
+      "net_pnl": 9.799999999999999,
+      "purge_dates": [
+        "2025-10-25"
+      ],
+      "selected_threshold_from_prior_folds": 0.01,
+      "train_end": "2025-10-18",
+      "train_start": "2025-01-02",
+      "validation_end": "2026-03-22",
+      "validation_start": "2025-10-26"
+    },
+    {
+      "candidate_threshold_pnl": {
+        "0.01": 5.03,
+        "0.02": 3.9299999999999997,
+        "0.03": 3.969999999999999,
+        "0.05": 3.83,
+        "0.075": 4.32,
+        "0.1": 1.8099999999999998,
+        "0.15": 0.76
+      },
+      "cross_fitted_calibration_temperature": 1.0196841555796146,
+      "cross_fitted_coverage_tail_80": 0.21225,
+      "cross_fitted_coverage_tail_90": 0.10475,
+      "fold_id": "trading_outer_02",
+      "n_trades": 43,
+      "n_train_days": 270,
+      "n_validation_days": 48,
+      "net_pnl": 5.03,
+      "purge_dates": [
+        "2026-03-22"
+      ],
+      "selected_threshold_from_prior_folds": 0.01,
+      "train_end": "2026-03-20",
+      "train_start": "2025-01-02",
+      "validation_end": "2026-05-20",
+      "validation_start": "2026-03-23"
+    }
+  ],
+  "generated_at_utc": "2026-09-01T01:37:48.652397+00:00",
+  "hypothesis": "A strictly prior-day 365-day empirical convolution from same-feed KNYC maxima to the official Daily Climate Report removes the hurdle model's settlement-grid failure; cross-fitted interval and probability calibration then improve competence metrics without weakening execution assumptions.",
+  "probability_metrics": {
+    "calibration_temperatures": [
+      0.7928374633176517,
+      0.8448840425892803,
+      1.0196841555796146
+    ],
+    "coherent_market": {
+      "coverage_80": 0.9676628579565538,
+      "coverage_90": 0.9846674268739564,
+      "coverage_error_80": 0.16766285795655378,
+      "coverage_error_90": 0.08466742687395634,
+      "ece": 0.016411448104561015,
+      "log_loss": 0.5823083346910687,
+      "multiclass_brier": 0.3209654012186272,
+      "n_event_days": 228,
+      "n_snapshots": 24958,
+      "ranked_probability_score": 0.052695803040076636
+    },
+    "coverage_calibration_tails": [
+      {
+        "tail_80": 0.20825,
+        "tail_90": 0.10475
+      },
+      {
+        "tail_80": 0.2145,
+        "tail_90": 0.10325000000000001
+      },
+      {
+        "tail_80": 0.21225,
+        "tail_90": 0.10475
+      }
+    ],
+    "coverage_error_80": -0.010475070547824705,
+    "coverage_error_90": -0.00404819335034412,
+    "coverage_source": "integer_temperature_hurdle_distribution",
+    "ece": 0.030231268387278257,
+    "frozen_champion": {
+      "coverage_80": 0.9709211278523524,
+      "coverage_90": 0.9868334310049961,
+      "coverage_error_80": 0.17092112785235236,
+      "coverage_error_90": 0.08683343100499608,
+      "ece": 0.02826185840175196,
+      "log_loss": 0.8586695904290201,
+      "multiclass_brier": 0.4740930397320355,
+      "n_event_days": 228,
+      "n_snapshots": 24958,
+      "ranked_probability_score": 0.08721089745814822
+    },
+    "frozen_champion_comparison": {
+      "baseline": "frozen_production_ngboost",
+      "block_length_days": 15,
+      "log_loss_skill": -0.008954910743799394,
+      "log_loss_skill_ci_2_5": -0.12449495847048166,
+      "log_loss_skill_ci_97_5": 0.10751195066267696,
+      "n_event_days": 228,
+      "rps_skill": 0.03864940827479624,
+      "rps_skill_ci_2_5": -0.06611658228744689,
+      "rps_skill_ci_97_5": 0.13057646592063224
+    },
+    "frozen_champion_reference": "exact shared timestamp and Kalshi bucket frozen production NGBoost",
+    "hybrid": {
+      "coverage_80": 0.9565131395542337,
+      "coverage_90": 0.9799712008310338,
+      "coverage_error_80": 0.15651313955423363,
+      "coverage_error_90": 0.07997120083103382,
+      "ece": 0.030231268387278257,
+      "log_loss": 0.5978751193040622,
+      "multiclass_brier": 0.3245155598360667,
+      "n_event_days": 228,
+      "n_snapshots": 24958,
+      "ranked_probability_score": 0.05289804478181839
+    },
+    "hybrid_log_loss_skill": -0.02673288992377576,
+    "hybrid_rps_skill": -0.003837909853806609,
+    "log_loss_skill": -0.008954910743799394,
+    "log_loss_skill_ci_2_5": -0.12449495847048166,
+    "rps_skill": 0.03864940827479624,
+    "rps_skill_ci_2_5": -0.06611658228744689,
+    "weather": {
+      "coverage_80": 0.7895249294521753,
+      "coverage_90": 0.8959518066496559,
+      "coverage_error_80": -0.010475070547824705,
+      "coverage_error_90": -0.00404819335034412,
+      "ece": 0.04216399571003507,
+      "log_loss": 0.8663588999697267,
+      "multiclass_brier": 0.4672413535270879,
+      "n_event_days": 228,
+      "n_snapshots": 24958,
+      "ranked_probability_score": 0.08384024787627686
+    },
+    "weather_log_loss_skill_vs_market": -0.4878009610309888,
+    "weather_rps_skill_vs_market": -0.5910232511783529
+  },
+  "robustness": {
+    "candle_granularity": {
+      "fraction_within_execution_window": 0.9748140721886398,
+      "maximum_execution_gap_minutes": 5,
+      "median_gap_minutes": 1.0,
+      "n_gaps": 744106,
+      "p95_gap_minutes": 4.0,
+      "passed": true,
+      "reason": "ok"
+    },
+    "doubled_cost_net_pnl": 21.169999999999998,
+    "positive_fold_fraction": 1.0,
+    "two_tick_net_pnl": 21.549999999999994
+  },
+  "run_id": "20260901T013748Z-c289e11f",
+  "trading_metrics": {
+    "annualized_return": 0.07948137931034484,
+    "calmar": 89.67265839080491,
+    "calmar_ratio": 89.67265839080491,
+    "deflated_sharpe": {
+      "confidence": 0.9999894458909063,
+      "deflated_sharpe": 4.252833860044451,
+      "expected_max_sharpe": 2.373869715080966,
+      "n_observations": 87,
+      "observed_sharpe": 15.979638892507863,
+      "trials": 7
+    },
+    "dsr_confidence": 0.9999894458909063,
+    "max_drawdown": -1.000000000000007,
+    "max_drawdown_fraction": -0.0008863502068150453,
+    "max_drawdown_pct": -0.0008863502068150453,
+    "n_event_days": 87,
+    "n_trades": 128,
+    "net_pnl": 27.439999999999998,
+    "net_pnl_ci_2_5": 20.329749999999997,
+    "net_pnl_ci_97_5": 35.00249999999998,
+    "pbo": 0.0,
+    "pbo_details": {
+      "median_logit": 1.9459101490553132,
+      "n_combinations": 70,
+      "pbo": 0.0
+    },
+    "profit_factor": 4.421446384039899,
+    "sharpe": 15.979638892507863,
+    "sharpe_ratio": 15.979638892507863,
+    "sortino": 34.462988411686574,
+    "sortino_ratio": 34.462988411686574,
+    "supports_profitability_claim": false,
+    "win_rate": 0.6484375
+  }
+}

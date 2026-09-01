@@ -97,19 +97,19 @@ risk:
   max_contracts_per_order: 1
   max_contracts_per_market: 5
   max_dollars_per_order: 5
-  max_dollars_per_market: 20
-  max_dollars_per_event: 30
-  max_correlated_event_exposure_dollars: 30
+  max_dollars_per_market: 5
+  max_dollars_per_event: 10
+  max_correlated_event_exposure_dollars: 10
   max_total_exposure: 50
   max_open_orders: 10
-  max_daily_loss_dollars: 25
+  max_daily_loss_dollars: 20
   min_cash_reserve_dollars: 0
   denylist_tickers: []
   denylist_event_tickers: []
   denylist_target_dates: []
 
 paper:
-  starting_cash_dollars: 100
+  starting_cash_dollars: 1000
   fill_mode: immediate
 
 edge:

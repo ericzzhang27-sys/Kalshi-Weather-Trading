@@ -1,0 +1,30 @@
+[
+  {
+    "source": "TrevorJS/kalshi-trades",
+    "url": "https://huggingface.co/datasets/TrevorJS/kalshi-trades",
+    "coverage": "Global Kalshi trades/markets June 2021 through January 2026",
+    "use": "Primary deep static archive; filtered for HIGHNY0/HIGHNY/KXHIGHNY",
+    "notes": "154,505,005 trades; 17,464,713 markets; CC-BY-4.0"
+  },
+  {
+    "source": "Kalshi Historical Data docs/API",
+    "url": "https://docs.kalshi.com/getting_started/historical_data",
+    "coverage": "Dynamic historical tier",
+    "use": "Incremental extension / cross-check",
+    "notes": "Historical cutoff moves over time"
+  },
+  {
+    "source": "Kalshi Get Trades",
+    "url": "https://docs.kalshi.com/api-reference/market/get-trades",
+    "coverage": "Current/recent tier",
+    "use": "Append current trades",
+    "notes": "Public endpoint, paginated"
+  },
+  {
+    "source": "Kalshi Historical Trades",
+    "url": "https://docs.kalshi.com/api-reference/historical/get-historical-trades",
+    "coverage": "Trades older than live cutoff",
+    "use": "Append archived recent trades",
+    "notes": "Public endpoint, paginated"
+  }
+]

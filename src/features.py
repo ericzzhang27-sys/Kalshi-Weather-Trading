@@ -636,6 +636,9 @@ def _latest_at_or_before(
             continue
 
         right_times = pd.to_datetime(group[right_time_col], errors="coerce")
+        valid_right = right_times.notna()
+        group = group.loc[valid_right].copy()
+        right_times = right_times.loc[valid_right].astype("datetime64[ns]")
         right_ns = right_times.astype("int64").to_numpy()
         left_times = pd.to_datetime(left_group[left_time_col], errors="coerce")
 

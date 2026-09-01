@@ -1,0 +1,280 @@
+{
+  "config_hash": "3aad6a0e7d82e3bc301922f74698a5ff2a35032a82e0de5cc00175d9a36a50b0",
+  "created_at_utc": "2026-09-01T03:17:51.124101+00:00",
+  "data_hash": "1fb6ffadfb155b2aa752a4e07d52f19f3abb30adcc57e82759ed75a1d314ef0f",
+  "elapsed_seconds": 3.5540096999993693,
+  "evidence_label": "counterfactual_constant_leverage_no_historical_depth",
+  "experiment_id": "20260901T031751Z-constant-leverage",
+  "failure_reason": null,
+  "family": "constant_contract_leverage",
+  "folds": [
+    {
+      "fold_id": "trading_outer_00",
+      "metrics": {
+        "annualized_return": 0.7144199999999999,
+        "cagr": 0.6112817469906553,
+        "calmar": 76.52822154973724,
+        "elapsed_calendar_days": 174,
+        "max_drawdown": -18.349999999999994,
+        "max_drawdown_fraction": -0.009335379622479323,
+        "n_evaluation_days": 90,
+        "n_event_days": 40,
+        "n_trades": 91,
+        "net_pnl": 255.14999999999998,
+        "profit_factor": 3.0238756246529706,
+        "sharpe": 9.482502002689454,
+        "sortino": 29.245244095134545,
+        "supports_profitability_claim": false,
+        "total_return": 0.25515,
+        "win_rate": 0.4175824175824176
+      }
+    },
+    {
+      "fold_id": "trading_outer_01",
+      "metrics": {
+        "annualized_return": 0.353304,
+        "cagr": 0.34078943414543805,
+        "calmar": 17.466525071618165,
+        "elapsed_calendar_days": 148,
+        "max_drawdown": -22.620000000000033,
+        "max_drawdown_fraction": -0.020227492220195153,
+        "n_evaluation_days": 90,
+        "n_event_days": 27,
+        "n_trades": 44,
+        "net_pnl": 126.17999999999999,
+        "profit_factor": 2.8415061295971973,
+        "sharpe": 4.517382589525197,
+        "sortino": 9.01110943952743,
+        "supports_profitability_claim": false,
+        "total_return": 0.12617999999999996,
+        "win_rate": 0.4772727272727273
+      }
+    },
+    {
+      "fold_id": "trading_outer_02",
+      "metrics": {
+        "annualized_return": 0.305235,
+        "cagr": 0.4188468046298719,
+        "calmar": 38.69615747787611,
+        "elapsed_calendar_days": 59,
+        "max_drawdown": -8.189999999999998,
+        "max_drawdown_fraction": -0.007887992500922425,
+        "n_evaluation_days": 48,
+        "n_event_days": 37,
+        "n_trades": 37,
+        "net_pnl": 58.14,
+        "profit_factor": 2.956258411843877,
+        "sharpe": 4.000722660401964,
+        "sortino": 19.06212432107013,
+        "supports_profitability_claim": false,
+        "total_return": 0.05814000000000008,
+        "win_rate": 0.2702702702702703
+      }
+    }
+  ],
+  "hypothesis": "Constant-contract scaling can reach 40% CAGR without changing the six-Sharpe signal shape.",
+  "model_hash": "c1a711eb653f6ff7fe52f60e1d773cefbf659f31b9ee2c4fd57b552c22a63b12",
+  "package_hash": "afeb0178e1f6a0d74e7f3417b693b2652741228ff9bba834fde9b9171f6379eb",
+  "probability_metrics": {
+    "calibration_temperatures": [
+      0.7932284559881947,
+      0.8016495501935229,
+      0.9559547845228072
+    ],
+    "coherent_market": {
+      "coverage_80": 0.9676628579565538,
+      "coverage_90": 0.9846674268739564,
+      "coverage_error_80": 0.16766285795655378,
+      "coverage_error_90": 0.08466742687395634,
+      "ece": 0.016411448104561015,
+      "log_loss": 0.5823083346910687,
+      "multiclass_brier": 0.3209654012186272,
+      "n_event_days": 228,
+      "n_snapshots": 24958,
+      "ranked_probability_score": 0.052695803040076636
+    },
+    "coverage_calibration_tails": [
+      {
+        "tail_80": 0.20825,
+        "tail_90": 0.10400000000000001
+      },
+      {
+        "tail_80": 0.19875,
+        "tail_90": 0.08225
+      },
+      {
+        "tail_80": 0.20425000000000001,
+        "tail_90": 0.1
+      }
+    ],
+    "coverage_error_80": -0.004892418890629635,
+    "coverage_error_90": 0.002386319710001583,
+    "coverage_source": "integer_temperature_hurdle_distribution",
+    "ece": 0.019852386867103326,
+    "frozen_champion": {
+      "coverage_80": 0.9709211278523524,
+      "coverage_90": 0.9868334310049961,
+      "coverage_error_80": 0.17092112785235236,
+      "coverage_error_90": 0.08683343100499608,
+      "ece": 0.02826185840175196,
+      "log_loss": 0.8586695904290201,
+      "multiclass_brier": 0.4740930397320355,
+      "n_event_days": 228,
+      "n_snapshots": 24958,
+      "ranked_probability_score": 0.08721089745814822
+    },
+    "frozen_champion_comparison": {
+      "baseline": "frozen_production_ngboost",
+      "block_length_days": 15,
+      "log_loss_skill": 0.0642510316647672,
+      "log_loss_skill_ci_2_5": 0.023245181304887497,
+      "log_loss_skill_ci_97_5": 0.10498626339998493,
+      "n_event_days": 228,
+      "rps_skill": 0.08388950304954235,
+      "rps_skill_ci_2_5": 0.037472435914237996,
+      "rps_skill_ci_97_5": 0.12735242293082136
+    },
+    "frozen_champion_reference": "exact shared timestamp and Kalshi bucket frozen production NGBoost",
+    "hybrid": {
+      "coverage_80": 0.9588470879096991,
+      "coverage_90": 0.9774089840171726,
+      "coverage_error_80": 0.15884708790969904,
+      "coverage_error_90": 0.07740898401717256,
+      "ece": 0.019852386867103326,
+      "log_loss": 0.581851551891746,
+      "multiclass_brier": 0.32107603605505747,
+      "n_event_days": 228,
+      "n_snapshots": 24958,
+      "ranked_probability_score": 0.05253549167877768
+    },
+    "hybrid_log_loss_skill": 0.0007844345892198401,
+    "hybrid_rps_skill": 0.0030422035921350288,
+    "log_loss_skill": 0.0642510316647672,
+    "log_loss_skill_ci_2_5": 0.023245181304887497,
+    "rps_skill": 0.08388950304954235,
+    "rps_skill_ci_2_5": 0.037472435914237996,
+    "weather": {
+      "coverage_80": 0.7951075811093704,
+      "coverage_90": 0.9023863197100016,
+      "coverage_error_80": -0.004892418890629635,
+      "coverage_error_90": 0.002386319710001583,
+      "ece": 0.048672967632469276,
+      "log_loss": 0.8034991833847922,
+      "multiclass_brier": 0.44040567234666106,
+      "n_event_days": 228,
+      "n_snapshots": 24958,
+      "ranked_probability_score": 0.07989481860987957
+    },
+    "weather_log_loss_skill_vs_market": -0.37985176497786455,
+    "weather_rps_skill_vs_market": -0.51615145800354
+  },
+  "promotion_decision": "retain_champion",
+  "robustness_tests": {
+    "block_bootstrap": {
+      "block_days": 15,
+      "method": "moving_date_block_bootstrap",
+      "n_days": 228,
+      "n_resamples": 4000,
+      "net_pnl_ci_2_5": 270.65799999999996,
+      "net_pnl_ci_97_5": 617.8059999999999,
+      "net_pnl_mean": 438.91028
+    },
+    "deflated_sharpe": {
+      "confidence": 0.9999633393456209,
+      "deflated_sharpe": 3.965242689756642,
+      "expected_max_sharpe": 2.4711136883041633,
+      "n_observations": 228,
+      "observed_sharpe": 6.2885249377511485,
+      "trials": 60
+    },
+    "stress_tests": {
+      "doubled_fee": {
+        "diagnostics": {
+          "additional_adverse_ticks": 0,
+          "contract_multiplier": 20,
+          "ending_cash_after_all_settlements": 1408.7499999999968,
+          "executed_signals": 172,
+          "fee_rate": 0.14,
+          "fully_funded_only": true,
+          "input_signals": 172,
+          "maximum_concurrent_cash_committed": 92.22,
+          "maximum_concurrent_cash_committed_fraction": 0.09222,
+          "minimum_free_cash": 952.3600000000001,
+          "rejected_for_cash": 0
+        },
+        "metrics": {
+          "annualized_return": 0.45177631578947375,
+          "cagr": 0.38892378629097113,
+          "calmar": 26.02845007078963,
+          "elapsed_calendar_days": 381,
+          "max_drawdown": -23.41999999999996,
+          "max_drawdown_fraction": -0.017357019513677407,
+          "n_evaluation_days": 228,
+          "n_event_days": 104,
+          "n_trades": 172,
+          "net_pnl": 408.75,
+          "profit_factor": 2.7361111111111116,
+          "sharpe": 5.968795302375015,
+          "sortino": 14.43775551737909,
+          "supports_profitability_claim": false,
+          "total_return": 0.40874999999999995,
+          "win_rate": 0.4011627906976744
+        }
+      },
+      "two_extra_ticks": {
+        "diagnostics": {
+          "additional_adverse_ticks": 2,
+          "contract_multiplier": 20,
+          "ending_cash_after_all_settlements": 1368.5100000000034,
+          "executed_signals": 172,
+          "fee_rate": 0.07,
+          "fully_funded_only": true,
+          "input_signals": 172,
+          "maximum_concurrent_cash_committed": 95.26,
+          "maximum_concurrent_cash_committed_fraction": 0.09526000000000001,
+          "minimum_free_cash": 946.8800000000001,
+          "rejected_for_cash": 0
+        },
+        "metrics": {
+          "annualized_return": 0.4073005263157895,
+          "cagr": 0.35086825187068893,
+          "calmar": 21.45370026535707,
+          "elapsed_calendar_days": 381,
+          "max_drawdown": -25.130000000000052,
+          "max_drawdown_fraction": -0.018985094472187103,
+          "n_evaluation_days": 228,
+          "n_event_days": 104,
+          "n_trades": 172,
+          "net_pnl": 368.51,
+          "profit_factor": 2.3764240092630624,
+          "sharpe": 5.473881824002224,
+          "sortino": 12.427253398830434,
+          "supports_profitability_claim": false,
+          "total_return": 0.3685099999999999,
+          "win_rate": 0.4011627906976744
+        }
+      }
+    }
+  },
+  "seed": 20260831,
+  "status": "succeeded",
+  "trading_metrics": {
+    "annualized_return": 0.48573000000000005,
+    "cagr": 0.417945804512426,
+    "calmar": 29.49231449602109,
+    "elapsed_calendar_days": 381,
+    "max_drawdown": -22.620000000000005,
+    "max_drawdown_fraction": -0.01646971451038648,
+    "n_evaluation_days": 228,
+    "n_event_days": 104,
+    "n_trades": 172,
+    "net_pnl": 439.4699999999999,
+    "profit_factor": 2.9592082385983693,
+    "sharpe": 6.2885249377511485,
+    "sortino": 16.2239752968448,
+    "supports_profitability_claim": false,
+    "total_return": 0.43947000000000025,
+    "win_rate": 0.4011627906976744
+  },
+  "trial_count": 60
+}

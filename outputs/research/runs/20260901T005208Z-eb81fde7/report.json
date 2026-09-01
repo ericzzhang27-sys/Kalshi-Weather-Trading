@@ -1,0 +1,215 @@
+{
+  "assumptions": {
+    "execution": "first later executable one-minute quote within five minutes; one contract",
+    "historical_depth": "unavailable; no executable-depth claim",
+    "live_trading": false,
+    "scope": "NYC KXHIGHNY only",
+    "selection": "whole event-day expanding folds with one-day purge"
+  },
+  "competence_gates": {
+    "checks": {
+      "bootstrap_net_pnl_lower": true,
+      "calibration_ece": false,
+      "calmar": true,
+      "coverage_80": false,
+      "coverage_90": false,
+      "deflated_sharpe_confidence": true,
+      "doubled_costs": true,
+      "drawdown": true,
+      "event_day_count": false,
+      "hybrid_skill_positive": true,
+      "pbo": false,
+      "profit_factor": true,
+      "rolling_folds": true,
+      "sharpe": true,
+      "sortino": true,
+      "trade_count": false,
+      "two_adverse_ticks": true,
+      "weather_log_loss_skill_positive": false,
+      "weather_rps_skill_positive": false
+    },
+    "failed_gates": [
+      "weather_log_loss_skill_positive",
+      "weather_rps_skill_positive",
+      "calibration_ece",
+      "coverage_80",
+      "coverage_90",
+      "trade_count",
+      "event_day_count",
+      "pbo"
+    ],
+    "passed": false,
+    "promotion_decision": "retain_champion",
+    "thresholds": {
+      "maximum_coverage_error": 0.03,
+      "maximum_drawdown_fraction": 0.1,
+      "maximum_ece": 0.02,
+      "maximum_pbo": 0.2,
+      "minimum_bootstrap_pnl_lower": 0.0,
+      "minimum_calmar": 1.5,
+      "minimum_doubled_cost_pnl": 0.0,
+      "minimum_dsr_confidence": 0.95,
+      "minimum_event_days": 180,
+      "minimum_hybrid_skill": 0.0,
+      "minimum_log_loss_skill": 0.0,
+      "minimum_positive_fold_fraction": 0.75,
+      "minimum_profit_factor": 1.25,
+      "minimum_rps_skill": 0.0,
+      "minimum_sharpe": 1.5,
+      "minimum_sortino": 2.0,
+      "minimum_trades": 250,
+      "minimum_two_tick_pnl": 0.0
+    }
+  },
+  "evidence_label": "historical_proxy_validated",
+  "folds": [
+    {
+      "candidate_threshold_pnl": {
+        "0.01": 15.149999999999999,
+        "0.02": 15.03,
+        "0.03": 15.589999999999998,
+        "0.05": 14.79,
+        "0.075": 12.989999999999998,
+        "0.1": 9.82,
+        "0.15": 5.08
+      },
+      "fold_id": "trading_outer_00",
+      "n_trades": 58,
+      "n_train_days": 90,
+      "n_validation_days": 90,
+      "net_pnl": 14.79,
+      "purge_dates": [
+        "2025-04-28"
+      ],
+      "selected_threshold_from_prior_folds": 0.05,
+      "train_end": "2025-04-26",
+      "train_start": "2024-06-06",
+      "validation_end": "2026-03-02",
+      "validation_start": "2025-05-01"
+    },
+    {
+      "candidate_threshold_pnl": {
+        "0.01": 3.8599999999999994,
+        "0.02": 3.78,
+        "0.03": 4.06,
+        "0.05": 4.029999999999999,
+        "0.075": 3.5399999999999996,
+        "0.1": 4.029999999999999,
+        "0.15": 2.9499999999999997
+      },
+      "fold_id": "trading_outer_01",
+      "n_trades": 30,
+      "n_train_days": 180,
+      "n_validation_days": 19,
+      "net_pnl": 4.06,
+      "purge_dates": [
+        "2026-03-02"
+      ],
+      "selected_threshold_from_prior_folds": 0.03,
+      "train_end": "2026-02-25",
+      "train_start": "2024-06-06",
+      "validation_end": "2026-05-13",
+      "validation_start": "2026-03-04"
+    }
+  ],
+  "generated_at_utc": "2026-09-01T00:52:08.361587+00:00",
+  "hypothesis": "The authoritative Normal weather distribution plus a cross-fitted market pool improves proper scores and conservative proxy trading metrics versus the legacy calibrated Laplace input.",
+  "probability_metrics": {
+    "coherent_market": {
+      "coverage_80": 0.9731420483373401,
+      "coverage_90": 0.9854134026948848,
+      "coverage_error_80": 0.17314204833734004,
+      "coverage_error_90": 0.08541340269488473,
+      "ece": 0.04003921476297542,
+      "log_loss": 0.7238782024465374,
+      "multiclass_brier": 0.4376435238183104,
+      "n_event_days": 109,
+      "n_snapshots": 14711,
+      "ranked_probability_score": 0.13676854416800366
+    },
+    "coverage_error_80": 0.1959906048855713,
+    "coverage_error_90": 0.09966270912034514,
+    "ece": 0.0762445147085561,
+    "frozen_champion_reference": "self_baseline_skill_is_zero_until_a_challenger_is_evaluated",
+    "hybrid": {
+      "coverage_80": 0.9959906048855713,
+      "coverage_90": 0.9996627091203452,
+      "coverage_error_80": 0.1959906048855713,
+      "coverage_error_90": 0.09966270912034514,
+      "ece": 0.0762445147085561,
+      "log_loss": 0.7209353922783007,
+      "multiclass_brier": 0.4379707688586889,
+      "n_event_days": 109,
+      "n_snapshots": 14711,
+      "ranked_probability_score": 0.13558670975551057
+    },
+    "hybrid_log_loss_skill": 0.004065338835028798,
+    "hybrid_rps_skill": 0.008641127385558334,
+    "log_loss_skill": 0.0,
+    "rps_skill": 0.0,
+    "weather": {
+      "coverage_80": 0.9884679633853931,
+      "coverage_90": 0.9999999999999998,
+      "coverage_error_80": 0.18846796338539307,
+      "coverage_error_90": 0.09999999999999976,
+      "ece": 0.041607342163606995,
+      "log_loss": 0.7929722393969012,
+      "multiclass_brier": 0.48853874779701206,
+      "n_event_days": 109,
+      "n_snapshots": 14711,
+      "ranked_probability_score": 0.15203914847122918
+    },
+    "weather_log_loss_skill_vs_market": -0.09544981008799858,
+    "weather_rps_skill_vs_market": -0.1116528979387792
+  },
+  "robustness": {
+    "candle_granularity": {
+      "fraction_within_execution_window": 0.9728106688470163,
+      "maximum_execution_gap_minutes": 5,
+      "median_gap_minutes": 1.0,
+      "n_gaps": 322884,
+      "p95_gap_minutes": 3.0,
+      "passed": true,
+      "reason": "ok"
+    },
+    "doubled_cost_net_pnl": 17.94,
+    "positive_fold_fraction": 1.0,
+    "two_tick_net_pnl": 17.599999999999998
+  },
+  "run_id": "20260901T005208Z-eb81fde7",
+  "trading_metrics": {
+    "annualized_return": 0.08482500000000001,
+    "calmar": 182.67695425535226,
+    "calmar_ratio": 182.67695425535226,
+    "deflated_sharpe": {
+      "confidence": 0.9999790175384885,
+      "deflated_sharpe": 4.096386421143937,
+      "expected_max_sharpe": 2.96841597942361,
+      "n_observations": 56,
+      "observed_sharpe": 16.143689597517422,
+      "trials": 7
+    },
+    "dsr_confidence": 0.9999790175384885,
+    "max_drawdown": -0.8600000000000012,
+    "max_drawdown_fraction": -0.00046434428658925775,
+    "max_drawdown_pct": -0.00046434428658925775,
+    "n_event_days": 56,
+    "n_trades": 88,
+    "net_pnl": 18.85,
+    "net_pnl_ci_2_5": 12.709999999999999,
+    "net_pnl_ci_97_5": 21.83025,
+    "pbo": 0.5142857142857142,
+    "pbo_details": {
+      "median_logit": 0.0,
+      "n_combinations": 70,
+      "pbo": 0.5142857142857142
+    },
+    "profit_factor": 3.4966887417218544,
+    "sharpe": 16.143689597517422,
+    "sharpe_ratio": 16.143689597517422,
+    "sortino": 46.87179502645993,
+    "sortino_ratio": 46.87179502645993,
+    "supports_profitability_claim": false,
+    "win_rate": 0.5
+  }
+}

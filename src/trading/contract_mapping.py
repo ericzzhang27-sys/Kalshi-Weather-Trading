@@ -370,6 +370,7 @@ def _fallback_between_temperatures(market: Mapping[str, Any]) -> tuple[float, fl
     text = _contract_text(market)
     patterns = [
         r"between\s*(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)",
+        r"between\s*(-?\d+(?:\.\d+)?)\s+and\s+(-?\d+(?:\.\d+)?)",
         r"(-?\d+(?:\.\d+)?)\s*(?:deg|degree|degrees|°)?\s*to\s*(-?\d+(?:\.\d+)?)",
         r"\b(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)\s*(?:deg|degree|degrees|°)?",
     ]
@@ -378,7 +379,10 @@ def _fallback_between_temperatures(market: Mapping[str, Any]) -> tuple[float, fl
         if match:
             lower = float(match.group(1))
             upper = float(match.group(2))
-            if upper > lower:
+            # Older Kalshi exact-degree contracts use text such as ``96-96°``
+            # with no structured strikes. Equal textual bounds are a valid
+            # one-degree bucket and become (95.5, 96.5] downstream.
+            if upper >= lower:
                 return lower, upper
     return None
 

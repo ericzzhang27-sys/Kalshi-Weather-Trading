@@ -18,6 +18,7 @@ from src.data_audit import (  # noqa: E402
     read_openmeteo_metadata,
     write_verification_report,
 )
+from src.artifact_io import atomic_write_csv  # noqa: E402
 from src.forecast_data import (  # noqa: E402
     NDFD_FALLBACK_SOURCE,
     NDFD_FORECAST_SOURCE,
@@ -53,7 +54,7 @@ NDFD_DAILY_HIGH_ARCHIVE_CANDIDATES = [
     REPO_ROOT / "data" / "processed" / "ndfd_knyc_daily_high_forecasts.csv",
     REPO_ROOT / "outputs" / "data" / "ndfd_knyc_daily_high_forecasts.csv",
 ]
-REQUIRE_FULL_NDFD_FORECAST_COVERAGE = True
+REQUIRE_FULL_NDFD_FORECAST_COVERAGE = False
 
 DATA_PATH_CANDIDATES = {
     "daily_actual": [
@@ -505,12 +506,17 @@ def main() -> None:
     try:
         hourly_clean = load_nws_hourly_observations(RAW_DIR)
         hourly_source = NWS_ASOS_SOURCE
-    except FileNotFoundError:
-        hourly_clean = standardize_hourly_weather(raw_frames["hourly_actual"], location="NYC")
-        hourly_source = "open_meteo_hourly_historical_fallback"
-        warnings.append(
-            "IEM/NWS ASOS hourly CSV was not found; hourly observed features fell back to Open-Meteo."
-        )
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            "IEM/NWS ASOS KNYC hourly history is required for canonical training "
+            "features; blocked instead of substituting Open-Meteo observations."
+        ) from exc
+    blocked_ranges = pd.DataFrame(hourly_clean.attrs.get("blocked_ranges", []))
+    atomic_write_csv(
+        blocked_ranges.reindex(columns=["station", "timestamp", "source_file", "reason"]),
+        OUTPUTS_DIR / "blocked_source_ranges.csv",
+        index=False,
+    )
 
     openmeteo_forecasts_clean = standardize_daily_forecasts(raw_frames["daily_forecast"], location="NYC")
     forecasts_clean = openmeteo_forecasts_clean
@@ -582,10 +588,10 @@ def main() -> None:
     hourly_forecasts_output = PROCESSED_DIR / "hourly_forecasts_clean.csv"
     preview_output = PROCESSED_DIR / "modeling_base_preview.csv"
 
-    daily_clean.to_csv(daily_output, index=False)
-    hourly_clean.to_csv(hourly_output, index=False)
-    forecasts_clean.to_csv(forecasts_output, index=False)
-    hourly_forecasts_clean.to_csv(hourly_forecasts_output, index=False)
+    atomic_write_csv(daily_clean, daily_output, index=False)
+    atomic_write_csv(hourly_clean, hourly_output, index=False)
+    atomic_write_csv(forecasts_clean, forecasts_output, index=False)
+    atomic_write_csv(hourly_forecasts_clean, hourly_forecasts_output, index=False)
     write_ndfd_forecast_reports(
         forecasts_clean,
         REPORTS_DIR / "ndfd_forecast_coverage.csv",

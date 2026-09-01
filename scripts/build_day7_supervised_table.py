@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from src.artifact_io import atomic_write_csv  # noqa: E402
 from src.supervised_table import (  # noqa: E402
     PREDICTION_TIMES,
     expand_targets_to_prediction_times,
@@ -301,8 +302,8 @@ def main() -> None:
     captured_warning_messages.extend(str(item.message) for item in caught)
     captured_warning_messages.extend(_forecast_source_warnings(daily_forecasts))
 
-    daily_targets.to_csv(DAILY_TARGET_OUTPUT, index=False)
-    supervised_rows.to_csv(SUPERVISED_OUTPUT, index=False)
+    atomic_write_csv(daily_targets, DAILY_TARGET_OUTPUT, index=False)
+    atomic_write_csv(supervised_rows, SUPERVISED_OUTPUT, index=False)
 
     target_summary = build_target_summary(supervised_rows)
     target_summary.loc[:, FLOAT_SUMMARY_COLUMNS] = target_summary.loc[

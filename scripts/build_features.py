@@ -10,6 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from src.artifact_io import atomic_write_csv  # noqa: E402
 from src.features import build_feature_matrix, load_inputs, write_feature_columns  # noqa: E402
 from src.leakage_checks import run_leakage_checks, write_leakage_report  # noqa: E402
 
@@ -118,7 +119,7 @@ def main() -> None:
     inputs = load_inputs()
     modeling_rows = build_feature_matrix(inputs, missingness_output_path=MISSINGNESS_OUTPUT)
 
-    modeling_rows.to_csv(MODELING_ROWS_OUTPUT, index=False)
+    atomic_write_csv(modeling_rows, MODELING_ROWS_OUTPUT, index=False)
     preview = modeling_rows.sample(n=min(20, len(modeling_rows)), random_state=8)
     preview.to_csv(PREVIEW_OUTPUT, index=False)
 

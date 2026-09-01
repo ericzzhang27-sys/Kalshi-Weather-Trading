@@ -1,0 +1,19 @@
+{
+  "competent_champion_exists": false,
+  "continue_required": true,
+  "dominant_failure": {
+    "component": "execution_evidence",
+    "next_wave": "collect more event-days or improve calibrated edge; do not lower uncertainty or cost assumptions"
+  },
+  "generated_at_utc": "2026-09-01T02:05:50.486725+00:00",
+  "latest_run_id": "20260901T020540Z-815c45d6",
+  "pareto_run_ids": [
+    "20260901T013748Z-c289e11f",
+    "20260901T014441Z-e18f3397",
+    "20260901T015134Z-cb08977e",
+    "20260901T015819Z-4538470d"
+  ],
+  "plateau_rule": "a plateau cannot stop research before every competence floor passes",
+  "reports_assessed": 9,
+  "status": "continue_research_floors_not_met"
+}

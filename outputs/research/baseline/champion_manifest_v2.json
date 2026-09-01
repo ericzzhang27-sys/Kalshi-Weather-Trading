@@ -1,0 +1,33 @@
+{
+  "content_hash": "1e33ee863558fd411a6ae2343c1557988c45c249f0739fac05e377f35f5957fd",
+  "created_at_utc": "2026-09-01T02:08:27.954939+00:00",
+  "files": [
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\config\\model_config.yaml",
+      "sha256": "fc6317bfff03c2bda7c84a32391549c2c0e1ff6c7bd9e3c5fbf3209903d399b7",
+      "size": 3669
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\data\\processed\\modeling_rows_v1_pre_regional_backup_20260826.csv",
+      "sha256": "bbc5556ede8616c5b4baa148f5e5c0828e49a6b3d8ae3266572f465dfbe78a1a",
+      "size": 35117450
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\models\\ngboost_normal_v0.pkl",
+      "sha256": "ccf1d001d277f3cc50b9ecec518f2f9de891fd0ac94c49a75f1766d7701599ed",
+      "size": 1339631
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\models\\production_model_bundle.json",
+      "sha256": "ca437c4329793fc122fdbc62188dcbd417ccc868a035065d39845d429df1a942",
+      "size": 1992
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\final_feature_list.json",
+      "sha256": "77f131c0c6226a2025555d05cf5d7c9662b23ec7f84afad1271c8432cb11dc1a",
+      "size": 1781
+    }
+  ],
+  "label": "authoritative_frozen_production_champion_v2",
+  "schema_version": 1
+}

@@ -1,0 +1,2 @@
+row_type,fetched_at,source,cash_balance_dollars,portfolio_value_dollars,updated_ts,ticker,event_ticker,outcome_side,position_contracts,market_exposure_dollars,realized_pnl_dollars,fees_paid_dollars,resting_orders_count,order_id,client_order_id,action,order_status,price_dollars,remaining_contracts,initial_contracts,order_exposure_dollars
+balance,2026-09-01T22:16:09.256344+00:00,paper,100.0,100.0,2026-09-01T22:16:09.256344+00:00,,,,,,,,,,,,,,,,

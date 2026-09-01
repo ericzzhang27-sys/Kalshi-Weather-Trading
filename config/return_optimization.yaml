@@ -1,0 +1,39 @@
+schema_version: 1
+objective: maximize_walk_forward_cagr
+input_run: outputs/research/runs/20260901T020540Z-815c45d6
+evaluation_calendar_source: outputs/backtest_inputs/20260901T013248Z-1m-3ee54b14/aligned_rows_1m.parquet
+starting_equity: 1000.0
+hard_max_drawdown_fraction: 0.15
+selection_policy:
+  # Outer fold zero is deliberately not tuned because no earlier OOS fold exists.
+  first_fold_candidate: edge_0_all_both_unlimited
+  minimum_prior_trades: 20
+  require_positive_each_prior_fold: true
+  tie_breakers:
+    - lower_max_drawdown
+    - more_trades
+    - simpler_candidate
+candidate_space:
+  minimum_lower_confidence_edge: [0.0, 0.01, 0.02, 0.03, 0.05, 0.075, 0.10, 0.15]
+  local_time_regime: [all, before_12, 12_to_16, after_16, after_12]
+  side: [both, buy_yes, buy_no]
+  maximum_trades_per_event: [1, 2, unlimited]
+execution:
+  primary_contracts: 1
+  fee_rate: 0.07
+  entry_slippage_already_in_ledger: true
+  holding_period: hold_to_settlement
+  historical_depth_available: false
+sizing_sensitivity:
+  evidence_label: counterfactual_sizing_sensitivity_no_historical_depth
+  lower_confidence_kelly_fractions: [0.05, 0.10, 0.15, 0.20, 0.25]
+  max_market_fraction: 0.005
+  max_event_fraction: 0.01
+  max_total_exposure_fraction: 0.05
+  max_daily_loss_fraction: 0.02
+  max_top_book_fraction_forward_only: 0.10
+reporting:
+  calendar_days_per_year: 365.2425
+  daily_periods_per_year: 252
+  retain_probability_metrics_from_input_run: true
+  prohibit_live_promotion: true

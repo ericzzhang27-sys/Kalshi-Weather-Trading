@@ -1,0 +1,15 @@
+{
+  "canonical_sha256": "349b8a1175a462b2fafdae8c94f3174fd4ba618305bb8f570281aa99b4332d95",
+  "conditional_bundle_sha256": "a635d8525d0874cf30429e27dd9081037dae835910e6c63fa566cc7630e5a889",
+  "created_at_utc": "2026-09-01T00:54:52.151831+00:00",
+  "event_days": 141,
+  "evidence_label": "historical_challenger_previously_inspected",
+  "exceedance_bundle_sha256": "f6db9ea03d0d22a2e8cd9c81db1c260e5397890d5f5f0d4ac16c7418af2dd2d4",
+  "output_path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\hurdle_market_probabilities.parquet",
+  "output_sha256": "2308e65360a17bb0a9b4f7d2889477616e159b7ed2107bd052b51a63292989e2",
+  "prediction_timestamps": 19794,
+  "rows": 71200,
+  "source_hurdle_dataset_sha256": "11c136de61bbf789242d2c2a515bdda2af3856c52379d2fc264289d5c155dc88",
+  "test_period_previously_inspected": true,
+  "test_start": "2025-01-01"
+}

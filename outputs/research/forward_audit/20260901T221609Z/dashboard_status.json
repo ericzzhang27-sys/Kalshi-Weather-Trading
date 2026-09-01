@@ -1,0 +1,30 @@
+{
+  "dashboard_status": "WARN",
+  "data_source": "live_refresh",
+  "edge_rows": 12,
+  "event_ticker": "KXHIGHNY-26SEP01",
+  "feature_rows": 1,
+  "kalshi_env": "production",
+  "live_auto_enabled": false,
+  "live_feature_error": "",
+  "live_feature_status": "OK",
+  "mode": "shadow",
+  "model_name": "ngboost_normal_v0",
+  "model_path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\models\\ngboost_normal_v0.pkl",
+  "probability_mode": "diagnostic_no_trade",
+  "probability_rows": 6,
+  "probability_scoring_error": "",
+  "probability_scoring_status": "OK",
+  "read_only": true,
+  "refreshed_at": "2026-09-01T18:16:09.256353-04:00",
+  "settlement_reason": "unverified_observed_high_window",
+  "settlement_status": "POST_PEAK_NO_TRADE",
+  "settlement_trading_allowed": false,
+  "target_date": "2026-09-01",
+  "trading_enabled": false,
+  "warning_count": 2,
+  "warnings": [
+    "settlement_state:POST_PEAK_NO_TRADE:unverified_observed_high_window",
+    "unverified_observed_high_window"
+  ]
+}

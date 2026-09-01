@@ -1,0 +1,1 @@
+"""Kalshi historical data package."""

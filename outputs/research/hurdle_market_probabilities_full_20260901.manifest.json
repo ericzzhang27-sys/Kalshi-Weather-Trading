@@ -1,0 +1,17 @@
+{
+  "baseline": "frozen_production_ngboost_exact_shared_timestamps_and_kalshi_buckets",
+  "canonical_sha256": "bea4972c3cafe84f131fbd5a34923fd9eb517bb260af6ef0f9458947947b8021",
+  "conditional_bundle_sha256": "a635d8525d0874cf30429e27dd9081037dae835910e6c63fa566cc7630e5a889",
+  "created_at_utc": "2026-09-01T01:20:35.688072+00:00",
+  "event_days": 321,
+  "evidence_label": "historical_challenger_previously_inspected",
+  "exceedance_bundle_sha256": "f6db9ea03d0d22a2e8cd9c81db1c260e5397890d5f5f0d4ac16c7418af2dd2d4",
+  "frozen_champion_bundle_sha256": "8feff573fc4abdc98e76113ddd6b9140630551235df0d44c233634827f484602",
+  "output_path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\hurdle_market_probabilities_full_20260901.parquet",
+  "output_sha256": "d00141a126a20feed353071b6aff33fe62c8630a6c16cc977403a9965ca701f7",
+  "prediction_timestamps": 3790,
+  "rows": 22740,
+  "source_hurdle_dataset_sha256": "11c136de61bbf789242d2c2a515bdda2af3856c52379d2fc264289d5c155dc88",
+  "test_period_previously_inspected": true,
+  "test_start": "2025-01-01"
+}

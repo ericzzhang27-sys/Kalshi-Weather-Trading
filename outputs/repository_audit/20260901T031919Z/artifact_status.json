@@ -1,0 +1,32 @@
+{
+  "corrected_backtest_runs": [
+    {
+      "manifest_sha256": "7ea52079d9e83678b0303f251094428f456893d2e60a426cc6930ccca21d79a2",
+      "run_id": "20260826T012848Z-e12b5707",
+      "status": "diagnostic_no_test_trades"
+    },
+    {
+      "manifest_sha256": "a9d5fa5ecd8332a722cf050cf9ea607b960b73c4f83fc2b4c0b157437a7630f2",
+      "run_id": "20260826T013541Z-edd2b94a",
+      "status": "diagnostic_no_test_trades"
+    },
+    {
+      "manifest_sha256": "1d8bbd2bf3c17cd6ddbcb4f5b4a81564cb75784bac9205b283d4fe96eb370489",
+      "run_id": "20260826T014118Z-511c1aa4",
+      "status": "diagnostic_no_test_trades"
+    },
+    {
+      "manifest_sha256": "d2a9fdd1feab4a3714bb829a8f6f3ba4436ee4a4ba9ef6b98791c61377c26e6b",
+      "run_id": "20260826T145451Z-6ebd79af",
+      "status": "diagnostic_no_test_trades"
+    }
+  ],
+  "generated_at_utc": "2026-09-01T03:19:19.381312+00:00",
+  "historical_backtest_outputs": "corrected_diagnostic_available",
+  "legacy_backtest_outputs": "invalidated_assumptions_failed",
+  "legacy_outputs": "legacy_unverified",
+  "processed_data": "validated",
+  "production_model_bundle": "validated",
+  "repository_commit": "88f9bd12e4309ff4c9ea777cedc2ee5a229372b8",
+  "strict_failure_count": 0
+}

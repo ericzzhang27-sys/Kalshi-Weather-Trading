@@ -17,6 +17,10 @@ Most files in this directory are reproducible outputs rather than hand-written s
 | `day17_feature_lists/` | Candidate feature lists used for ablations and final-safe feature selection. |
 | `figures/` | Generated plots and presentation images. |
 | `live_trading/` | Read-only Kalshi market-discovery snapshots and future live/paper trading logs. |
+| `repository_audit/` | Immutable machine-readable and Markdown research-integrity audit runs. |
+| `backtests/` | Immutable causal backtest runs; consult each manifest before using metrics. |
+| `backtest_inputs/` | Hashed canonical Kalshi input snapshots used by corrected backtests. |
+| `hurdle/` | Five-minute hurdle-model ablations, calibration diagnostics, settlement-invariant audits, test predictions, and acceptance report. |
 | `visuals/` | Reserved visual-artifact folder. |
 
 ## Core Current Artifacts
@@ -42,6 +46,30 @@ Most files in this directory are reproducible outputs rather than hand-written s
 | `bucket_brier_scores.csv` | Bucket-level Brier scores and calibration gaps. |
 | `calibration_tables.csv` | Reliability tables used for calibration curves. |
 | `coverage_by_group.csv` | Grouped coverage diagnostics. |
+
+## Hurdle Model Outputs
+
+Run `python scripts/build_hurdle_dataset.py` to rebuild the same-feed
+five-minute future-high dataset, then `python scripts/train_hurdle.py --reuse-dataset` to
+run expanding-window model selection and the untouched final test.
+
+| File | Purpose |
+|---|---|
+| `hurdle/hurdle_dataset_summary.json` | Cadence, source, complete-day coverage rules, row counts, and target provenance. |
+| `hurdle/hurdle_invariant_violations.csv` | Same-feed target invariant audit; valid builds contain no rows. |
+| `hurdle/hurdle_official_settlement_disagreements.csv` | One-row-per-day reconciliation audit where the official daily high differs from the rounded five-minute-feed maximum; these values are not training labels. |
+| `hurdle/hourly_future_high_base_rates.csv` | Empirical probability, by local clock hour, that the same-feed rounded maximum will rise later that day. |
+| `hurdle/feature_ablation_results.csv` | Time/current-state/momentum/forecast/atmospheric ablation results from expanding folds. |
+| `hurdle/calibration_comparison.csv` | Forward-only raw, Platt, and isotonic calibration comparison. |
+| `hurdle/reliability_bins_test.csv` | Untouched-test reliability bins with extra low-probability resolution. |
+| `hurdle/reliability_diagram_test.png` | Visual reliability diagnostic for the untouched test. |
+| `hurdle/tail_failures.csv` | `<5%` predicted-probability rows where the high nevertheless increased. |
+| `hurdle/hurdle_training_report.md` | Acceptance checklist and headline held-out metrics. |
+| `hurdle/challenger_study/challenger_report.md` | Identical-fold NGBoost, logistic, and LightGBM exceedance-model bake-off and replacement decision. |
+| `hurdle/challenger_study/bss_by_time_of_day_test.csv` | Test Brier Skill Score and calibration by time-of-day segment for all three candidates. |
+| `hurdle/challenger_study/low_probability_calibration_test.csv` | `<5%`, `5–10%`, and `10–20%` calibration for each candidate. |
+| `remaining_increase/training_report.md` | Positive-row-only shifted-Poisson NGBoost training and held-out evaluation. |
+| `remaining_increase/expanding_fold_metrics.csv` | Conditional-model chronological fold NLL, error, and interval coverage. |
 
 ## Calibration Outputs
 
@@ -146,6 +174,51 @@ Run calibration diagnostics:
 ```bash
 python scripts/calibrate_ngboost.py
 ```
+
+Run the discrete-hazard conditional challenger against the frozen shifted-Poisson model:
+
+```bash
+python scripts/train_ordinal_hazard_challenger.py
+```
+
+This writes the cutoff audit, per-threshold probability metrics and reliability
+plots, positive-only distribution scores, and full hurdle diagnostics to
+`outputs/remaining_increase/ordinal_hazard_challenger/`. The script never
+promotes the challenger or modifies the frozen exceedance model.
+
+Run the conditional dispersion audit and shifted Negative Binomial challenger:
+
+```bash
+python scripts/train_negative_binomial_challenger.py
+```
+
+This writes overall and time/state dispersion tables, NB2 dispersion-parameter
+diagnostics, positive-only scores, calibration tables, paired daily losses, and
+full hurdle comparisons to
+`outputs/remaining_increase/negative_binomial_challenger/`.
+
+Run the preregistered walk-forward return optimization under the hard 15% drawdown cap:
+
+```bash
+python scripts/optimize_final_strategy.py
+```
+
+Each immutable run under `outputs/research/return_optimization/` contains the
+one-contract OOS ledger, candidate-selection audit, exact JSON/Markdown report,
+and a separately labeled no-historical-depth sizing sensitivity. The sensitivity
+must not be treated as executable-fill evidence.
+
+Run constant-contract leverage sensitivity while preserving the selected
+one-contract signal weights:
+
+```bash
+python scripts/optimize_constant_leverage.py
+```
+
+Runs under `outputs/research/leverage_optimization/` search for the smallest
+fully funded multiplier meeting the configured CAGR, Sharpe, and drawdown
+constraints. Results remain non-executable without historical depth and fill
+decomposition.
 
 Open or rerun the presentation notebook:
 

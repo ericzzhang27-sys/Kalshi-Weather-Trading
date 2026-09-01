@@ -1,0 +1,98 @@
+{
+  "content_hash": "be4e7f935f9664d144bd012cd4288fda88e03c4f422518165b476e9d5c4b758f",
+  "created_at_utc": "2026-09-01T22:16:47.852441+00:00",
+  "files": [
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\dashboard_status.json",
+      "sha256": "eb2ab6d3ca8aad967bd73b0d0c8c0bdaab2c0241cd74f244b6d543b36c345584",
+      "size": 1017
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\edge_table.csv",
+      "sha256": "7bc5338229a4803abee845f35a26031af1e5867226e8badd8df5034c19fa0a7e",
+      "size": 8163
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\live_bucket_probabilities.csv",
+      "sha256": "b46dfe20693f1d37f1fb78205f51aa853249d0d48119b004b5a088969517e9ac",
+      "size": 3996
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\live_feature_freshness.csv",
+      "sha256": "ca38abe84056a921d2194bc0c5eb9e49db8f5650cc0acf4cc9fa01b86691e82f",
+      "size": 5985
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\live_feature_rows.csv",
+      "sha256": "a779988416f8e9ee33e98313f3a90e345dbfc494c7c67df6a0f4cbfa64a4fd3d",
+      "size": 1604
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\live_weather_snapshot.csv",
+      "sha256": "68fccb8ad062dbbddbfd69fec05e93a786cdf9b8b788f0f06fb27c9fdedeffa6",
+      "size": 79610
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\market_discovery_raw.json",
+      "sha256": "10512754a7e775045588f8ba5117ab14bf7f2cacacaf24d8ef2798eaed651c75",
+      "size": 33492
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\market_discovery_snapshot.csv",
+      "sha256": "adbf943ea76aa79b54c4fe9f3e2a6844e409f1f63be4cb80fdf8f755fe93f7e4",
+      "size": 43479
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\order_intents.csv",
+      "sha256": "e12c093430a0a45e336e1309acb12c1d9648457ac05743160040cc668c78864a",
+      "size": 6773
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\orderbook_snapshot.csv",
+      "sha256": "efb77fe23d8d14c3ae36a97cb6abd618b058be088febad4f7494b2d07dd09c5a",
+      "size": 23733
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\orderbook_summary.csv",
+      "sha256": "17af2a0c3f505ddfd89618cc52f9425264d958050fa3623ca551c422a9905f60",
+      "size": 1355
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\paper_orders.csv",
+      "sha256": "2db3193b634babe7f9a75f26383b043893824898f6757cace15ef91f1d67f9af",
+      "size": 256
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\paper_pnl.csv",
+      "sha256": "c5dde46d339e6b75a9186d8414bf6807b0085c657596942f8ea757076e325368",
+      "size": 390
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\paper_positions.csv",
+      "sha256": "ff9093b797ae94bd320d51bcadfcec79c748f7ef6458f7bfa110fbcf95f8f067",
+      "size": 192
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\portfolio_snapshot.csv",
+      "sha256": "e803e50cddc2bd560ab366aead5ae8c3263bb59f4cf7a52021f108a1917b8225",
+      "size": 449
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\risk_decisions.csv",
+      "sha256": "35a421e00d9111b52ddc7b1867def3169cbfbcc85883c8baab6fd0c52b36958e",
+      "size": 9339
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\settlement_state.csv",
+      "sha256": "1d0eab320d4b85f6f409a035911566f11c444af7c71f858c9c48effaca749378",
+      "size": 674
+    },
+    {
+      "path": "C:\\Weather Trading\\Kalshi-Weather-Trading\\outputs\\research\\forward_audit\\20260901T221609Z\\trading_cycle_log.csv",
+      "sha256": "b9919b74818409b8615daac66d06caffaf78a442d99ef81a0a02396cdc938417",
+      "size": 3251
+    }
+  ],
+  "label": "sealed_forward_shadow_no_trade_2026-09-01",
+  "schema_version": 1
+}

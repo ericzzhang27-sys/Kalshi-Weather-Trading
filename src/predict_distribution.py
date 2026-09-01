@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -32,9 +33,10 @@ except ImportError:
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MODEL_PATH = REPO_ROOT / "models" / "ngboost_laplace_current36_default.pkl"
+DEFAULT_MODEL_PATH = REPO_ROOT / "models" / "ngboost_normal_v0.pkl"
 DEFAULT_FEATURE_LIST_PATH = REPO_ROOT / "outputs" / "final_feature_list.json"
 DEFAULT_CALIBRATION_CONFIG_PATH = REPO_ROOT / "models" / "calibration_config.json"
+DEFAULT_MODEL_BUNDLE_PATH = REPO_ROOT / "models" / "production_model_bundle.json"
 DEFAULT_OUTPUT_PATH = REPO_ROOT / "outputs" / "final_bucket_probability_predictions.csv"
 DEFAULT_SCHEMA_PATH = REPO_ROOT / "outputs" / "prediction_schema.md"
 
@@ -227,10 +229,27 @@ def load_probability_engine(
     model_path: str | Path = DEFAULT_MODEL_PATH,
     feature_list_path: str | Path = DEFAULT_FEATURE_LIST_PATH,
     calibration_config_path: str | Path | None = DEFAULT_CALIBRATION_CONFIG_PATH,
+    model_bundle_path: str | Path | None = None,
 ) -> ProbabilityEngine:
     """
     Load the saved model artifact, feature list, and calibration adjustment.
     """
+    use_default_bundle = (
+        model_bundle_path is None
+        and DEFAULT_MODEL_BUNDLE_PATH.exists()
+        and Path(model_path) == DEFAULT_MODEL_PATH
+        and Path(feature_list_path) == DEFAULT_FEATURE_LIST_PATH
+        and calibration_config_path == DEFAULT_CALIBRATION_CONFIG_PATH
+    )
+    if use_default_bundle:
+        model_bundle_path = DEFAULT_MODEL_BUNDLE_PATH
+    bundle = _load_model_bundle(model_bundle_path) if model_bundle_path is not None else None
+    if bundle is not None:
+        bundle_file = Path(model_bundle_path)
+        model_path = (bundle_file.parent / str(bundle["model_path"])).resolve()
+        feature_list_path = (bundle_file.parent / str(bundle["feature_list_path"])).resolve()
+        calibration_config_path = None
+
     model_file = Path(model_path)
     if not model_file.exists():
         raise FileNotFoundError(f"Model artifact not found: {model_file}")
@@ -242,7 +261,16 @@ def load_probability_engine(
         feature_list_path,
         artifact_metadata.get("feature_columns"),
     )
-    calibration = _load_calibration_config(calibration_config_path)
+    calibration = (
+        dict(bundle.get("calibration", {}))
+        if bundle is not None
+        else _load_calibration_config(calibration_config_path)
+    )
+    calibration = {
+        "alpha": _positive_float(calibration.get("alpha", 1.0), name="calibration alpha"),
+        "method": str(calibration.get("method", calibration.get("calibration_method", "none"))),
+        "distribution_type": str(calibration.get("distribution_type", "normal")),
+    }
     distribution = normalize_distribution_name(
         str(artifact_metadata.get("distribution_type", calibration["distribution_type"]))
     )
@@ -272,6 +300,7 @@ def predict_bucket_probabilities(
     model_path: str | Path = DEFAULT_MODEL_PATH,
     feature_list_path: str | Path = DEFAULT_FEATURE_LIST_PATH,
     calibration_config_path: str | Path | None = DEFAULT_CALIBRATION_CONFIG_PATH,
+    model_bundle_path: str | Path | None = None,
     forecast_rounding: str = "nearest",
 ) -> PredictionResult:
     """
@@ -281,6 +310,7 @@ def predict_bucket_probabilities(
         model_path=model_path,
         feature_list_path=feature_list_path,
         calibration_config_path=calibration_config_path,
+        model_bundle_path=model_bundle_path,
     )
     return engine.predict(rows, buckets=buckets, forecast_rounding=forecast_rounding)
 
@@ -380,6 +410,33 @@ def _unwrap_model_artifact(artifact: Any) -> tuple[Any, dict[str, Any]]:
     if isinstance(artifact, dict) and "model" in artifact:
         return artifact["model"], dict(artifact)
     return artifact, {}
+
+
+def _load_model_bundle(path: str | Path) -> dict[str, Any]:
+    bundle_path = Path(path)
+    if not bundle_path.exists():
+        raise FileNotFoundError(f"Model bundle not found: {bundle_path}")
+    payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    if payload.get("status") != "validated":
+        raise ValueError(f"Model bundle is not validated: {bundle_path}")
+    hashes = payload.get("sha256", {})
+    for label, field in (("model", "model_path"), ("feature_list", "feature_list_path")):
+        artifact_path = (bundle_path.parent / str(payload.get(field, ""))).resolve()
+        expected = str(hashes.get(label, "")).lower()
+        actual = _sha256_file(artifact_path) if artifact_path.exists() else "missing"
+        if not expected or actual != expected:
+            raise ValueError(
+                f"Model bundle {label} hash mismatch: expected={expected or 'missing'}, actual={actual}"
+            )
+    return payload
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _load_feature_columns(path: str | Path) -> list[str]:

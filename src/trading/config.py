@@ -90,12 +90,12 @@ class RiskSettings:
     max_contracts_per_order: int = 1
     max_contracts_per_market: int = 5
     max_dollars_per_order: float = 5.0
-    max_dollars_per_market: float = 20.0
-    max_dollars_per_event: float = 30.0
-    max_correlated_event_exposure_dollars: float = 30.0
+    max_dollars_per_market: float = 5.0
+    max_dollars_per_event: float = 10.0
+    max_correlated_event_exposure_dollars: float = 10.0
     max_total_exposure: float = 50.0
     max_open_orders: int = 10
-    max_daily_loss_dollars: float = 25.0
+    max_daily_loss_dollars: float = 20.0
     min_cash_reserve_dollars: float = 0.0
     denylist_tickers: tuple[str, ...] = ()
     denylist_event_tickers: tuple[str, ...] = ()
@@ -104,7 +104,7 @@ class RiskSettings:
 
 @dataclass(frozen=True)
 class PaperSettings:
-    starting_cash_dollars: float = 100.0
+    starting_cash_dollars: float = 1000.0
     fill_mode: str = "immediate"
 
 
@@ -509,7 +509,7 @@ def _parse_settlement_settings(raw: Any) -> SettlementSettings:
 def _parse_paper_settings(raw: Any) -> PaperSettings:
     data = _mapping(raw, "paper")
     return PaperSettings(
-        starting_cash_dollars=float(data.get("starting_cash_dollars", 100.0)),
+        starting_cash_dollars=float(data.get("starting_cash_dollars", 1000.0)),
         fill_mode=str(data.get("fill_mode", "immediate")).strip(),
     )
 
@@ -521,14 +521,14 @@ def _parse_risk_settings(raw: Any) -> RiskSettings:
         max_contracts_per_order=int(data.get("max_contracts_per_order", 1)),
         max_contracts_per_market=int(data.get("max_contracts_per_market", 5)),
         max_dollars_per_order=float(data.get("max_dollars_per_order", 5.0)),
-        max_dollars_per_market=float(data.get("max_dollars_per_market", 20.0)),
-        max_dollars_per_event=float(data.get("max_dollars_per_event", 30.0)),
+        max_dollars_per_market=float(data.get("max_dollars_per_market", 5.0)),
+        max_dollars_per_event=float(data.get("max_dollars_per_event", 10.0)),
         max_correlated_event_exposure_dollars=float(
-            data.get("max_correlated_event_exposure_dollars", 30.0)
+            data.get("max_correlated_event_exposure_dollars", 10.0)
         ),
         max_total_exposure=float(data.get("max_total_exposure", 50.0)),
         max_open_orders=int(data.get("max_open_orders", 10)),
-        max_daily_loss_dollars=float(data.get("max_daily_loss_dollars", 25.0)),
+        max_daily_loss_dollars=float(data.get("max_daily_loss_dollars", 20.0)),
         min_cash_reserve_dollars=float(data.get("min_cash_reserve_dollars", 0.0)),
         denylist_tickers=_tuple_of_strings(data.get("denylist_tickers", [])),
         denylist_event_tickers=_tuple_of_strings(data.get("denylist_event_tickers", [])),

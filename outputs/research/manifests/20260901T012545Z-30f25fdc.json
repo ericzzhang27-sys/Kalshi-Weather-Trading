@@ -1,0 +1,183 @@
+{
+  "config_hash": "fb35851d15c81324e274bd639c870780d6bf0118511ef6f202b73d60945b2d42",
+  "created_at_utc": "2026-09-01T01:25:45.986883+00:00",
+  "data_hash": "eb6b8369388252b09009003679d0d952255747340a67f3f36a9e32be1932d9e2",
+  "elapsed_seconds": 235.42680119999932,
+  "evidence_label": "historical_proxy_validated",
+  "experiment_id": "20260901T012545Z-30f25fdc",
+  "failure_reason": null,
+  "family": "frozen_weather_plus_regularized_market_log_odds_pool",
+  "folds": [
+    {
+      "fold_id": "trading_outer_00",
+      "n_train_days": 90,
+      "n_validation_days": 90,
+      "purge_dates": [
+        "2025-05-04"
+      ],
+      "train_end": "2025-05-02",
+      "train_start": "2025-01-02",
+      "validation_end": "2025-10-25",
+      "validation_start": "2025-05-05"
+    },
+    {
+      "fold_id": "trading_outer_01",
+      "n_train_days": 180,
+      "n_validation_days": 90,
+      "purge_dates": [
+        "2025-10-25"
+      ],
+      "train_end": "2025-10-18",
+      "train_start": "2025-01-02",
+      "validation_end": "2026-03-22",
+      "validation_start": "2025-10-26"
+    },
+    {
+      "fold_id": "trading_outer_02",
+      "n_train_days": 270,
+      "n_validation_days": 48,
+      "purge_dates": [
+        "2026-03-22"
+      ],
+      "train_end": "2026-03-20",
+      "train_start": "2025-01-02",
+      "validation_end": "2026-05-20",
+      "validation_start": "2026-03-23"
+    }
+  ],
+  "hypothesis": "The frozen intraday LightGBM exceedance plus shifted-Poisson remaining-increase distribution improves proper scores over the frozen production NGBoost on exact shared timestamps, and a temporally cross-fitted calibrated weather-market pool preserves executable edge under conservative costs.",
+  "model_hash": "ccf1d001d277f3cc50b9ecec518f2f9de891fd0ac94c49a75f1766d7701599ed",
+  "package_hash": "afeb0178e1f6a0d74e7f3417b693b2652741228ff9bba834fde9b9171f6379eb",
+  "probability_metrics": {
+    "calibration_temperatures": [
+      1.2420114148349892,
+      1.157086994924439,
+      1.0308966119335043
+    ],
+    "coherent_market": {
+      "coverage_80": 0.9676628579565538,
+      "coverage_90": 0.9846674268739563,
+      "coverage_error_80": 0.16766285795655378,
+      "coverage_error_90": 0.08466742687395623,
+      "ece": 0.016410686652319335,
+      "log_loss": 0.5823075695423656,
+      "multiclass_brier": 0.32096535781584945,
+      "n_event_days": 228,
+      "n_snapshots": 24957,
+      "ranked_probability_score": 0.052695764282157526
+    },
+    "coverage_error_80": 0.1246689953349901,
+    "coverage_error_90": 0.06083186424090192,
+    "coverage_source": "integer_temperature_hurdle_distribution",
+    "ece": 0.02406024784167519,
+    "frozen_champion": {
+      "coverage_80": 0.9709211278523524,
+      "coverage_90": 0.986833431004996,
+      "coverage_error_80": 0.17092112785235236,
+      "coverage_error_90": 0.08683343100499596,
+      "ece": 0.028275330747715977,
+      "log_loss": 0.8586895012908059,
+      "multiclass_brier": 0.4740994943723541,
+      "n_event_days": 228,
+      "n_snapshots": 24957,
+      "ranked_probability_score": 0.08719843639389682
+    },
+    "frozen_champion_comparison": {
+      "baseline": "frozen_production_ngboost",
+      "block_length_days": 15,
+      "log_loss_skill": -0.9245693963432329,
+      "log_loss_skill_ci_2_5": -1.5680376011367285,
+      "log_loss_skill_ci_97_5": -0.2979619565025119,
+      "n_event_days": 228,
+      "rps_skill": 0.019782679356461053,
+      "rps_skill_ci_2_5": -0.10208812509373366,
+      "rps_skill_ci_97_5": 0.12388239844358219
+    },
+    "frozen_champion_reference": "exact shared timestamp and Kalshi bucket frozen production NGBoost",
+    "hybrid": {
+      "coverage_80": 0.9720785676858159,
+      "coverage_90": 0.9875740518188393,
+      "coverage_error_80": 0.17207856768581586,
+      "coverage_error_90": 0.08757405181883926,
+      "ece": 0.02406024784167519,
+      "log_loss": 0.5885144484090596,
+      "multiclass_brier": 0.32094496598366407,
+      "n_event_days": 228,
+      "n_snapshots": 24957,
+      "ranked_probability_score": 0.05312927020916747
+    },
+    "hybrid_log_loss_skill": -0.010659107302300797,
+    "hybrid_rps_skill": -0.008226580123001037,
+    "log_loss_skill": -0.9245693963432329,
+    "log_loss_skill_ci_2_5": -1.5680376011367285,
+    "rps_skill": 0.019782679356461053,
+    "rps_skill_ci_2_5": -0.10208812509373366,
+    "weather": {
+      "coverage_80": 0.9246689953349901,
+      "coverage_90": 0.960831864240902,
+      "coverage_error_80": 0.1246689953349901,
+      "coverage_error_90": 0.06083186424090192,
+      "ece": 0.08770006581289364,
+      "log_loss": 1.6526075351455178,
+      "multiclass_brier": 0.4804692647603198,
+      "n_event_days": 228,
+      "n_snapshots": 24957,
+      "ranked_probability_score": 0.08547341768633157
+    },
+    "weather_log_loss_skill_vs_market": -1.838032032529302,
+    "weather_rps_skill_vs_market": -0.6220168518415885
+  },
+  "promotion_decision": "retain_champion",
+  "robustness_tests": {
+    "candle_granularity": {
+      "fraction_within_execution_window": 0.9748140721886398,
+      "maximum_execution_gap_minutes": 5,
+      "median_gap_minutes": 1.0,
+      "n_gaps": 744106,
+      "p95_gap_minutes": 4.0,
+      "passed": true,
+      "reason": "ok"
+    },
+    "doubled_cost_net_pnl": 8.05,
+    "positive_fold_fraction": 1.0,
+    "two_tick_net_pnl": 8.089999999999998
+  },
+  "seed": 42,
+  "status": "succeeded",
+  "trading_metrics": {
+    "annualized_return": 0.05588099999999999,
+    "calmar": 117.0951429375336,
+    "calmar_ratio": 117.0951429375336,
+    "deflated_sharpe": {
+      "confidence": 0.9954614069409556,
+      "deflated_sharpe": 2.609133353102392,
+      "expected_max_sharpe": 3.5251191595766405,
+      "n_observations": 40,
+      "observed_sharpe": 10.720738247201416,
+      "trials": 7
+    },
+    "dsr_confidence": 0.9954614069409556,
+    "max_drawdown": -0.9800000000000004,
+    "max_drawdown_fraction": -0.00047722730933263957,
+    "max_drawdown_pct": -0.00047722730933263957,
+    "n_event_days": 40,
+    "n_trades": 67,
+    "net_pnl": 8.87,
+    "net_pnl_ci_2_5": 4.869499999999999,
+    "net_pnl_ci_97_5": 11.05025,
+    "pbo": 0.7285714285714285,
+    "pbo_details": {
+      "median_logit": 0.0,
+      "n_combinations": 70,
+      "pbo": 0.7285714285714285
+    },
+    "profit_factor": 2.5896057347670247,
+    "sharpe": 10.720738247201416,
+    "sharpe_ratio": 10.720738247201416,
+    "sortino": 31.35396533779751,
+    "sortino_ratio": 31.35396533779751,
+    "supports_profitability_claim": false,
+    "win_rate": 0.3582089552238806
+  },
+  "trial_count": 7
+}

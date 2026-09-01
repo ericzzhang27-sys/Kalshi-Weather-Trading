@@ -44,10 +44,11 @@ The project converts final-temperature bucket boundaries into forecast-error bou
 
 - Primary model: NGBoost / distributional gradient boosting on `forecast_error`.
 - Current configured distribution: Normal, with sigma scaling from `config/model_config.yaml`.
+- Frozen hurdle stage: LightGBM estimates whether the rounded KNYC five-minute maximum will increase again before day-end, and a shifted-Poisson NGBoost models the positive remaining increase. Their integer distribution is now convolved with a strictly prior-day station-to-Daily-Climate-Report reconciliation model before pricing Kalshi buckets.
 - Required baseline: empirical historical forecast-error distribution.
 - Bucket probabilities: derived from one coherent model-implied CDF.
 - Evaluation priority: probability quality, calibration, interval coverage, and leakage safety.
-- Not included yet: live execution, sizing, order placement, or profitability claims.
+- Trading research: coherent weather/market stacking, conservative one-minute proxy fills, quarter-Kelly-compatible risk interfaces, full cost stresses, immutable experiment reports, and shadow WebSocket depth capture. Order submission remains disabled and historical results are not executable-depth or profitability claims.
 
 ## Repository Layout
 
@@ -231,6 +232,23 @@ Run calibration diagnostics:
 
 ```bash
 python scripts/calibrate_ngboost.py
+```
+
+Optimize the already cross-fitted OOS trading signals for CAGR subject to the
+hard drawdown constraint:
+
+```bash
+python scripts/optimize_final_strategy.py
+```
+
+The primary result remains one contract per trade. Any multi-contract result is
+reported separately because historical Kalshi order-book depth is unavailable.
+
+Test fixed-contract scaling without changing the one-contract strategy's signal
+weights:
+
+```bash
+python scripts/optimize_constant_leverage.py
 ```
 
 Key outputs:

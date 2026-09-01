@@ -240,7 +240,9 @@ def _candidate_official_daily_files(path_or_dir: str | Path) -> list[tuple[int, 
         except Exception:
             continue
         date_col = _select_column(df, ["DATE", "date"])
-        tmax_col = _select_column(df, ["TMAX", "tmax"])
+        tmax_col = _select_column(
+            df, ["TMAX", "tmax", "actual_high", "official_daily_high_f"]
+        )
         if date_col is None or tmax_col is None:
             continue
         candidates.append((_daily_source_score(df), path, df))
@@ -309,9 +311,11 @@ def load_official_daily_highs(path_or_dir: str | Path) -> pd.DataFrame:
 
     _, path, raw = candidates[0]
     date_col = _select_column(raw, ["DATE", "date"])
-    tmax_col = _select_column(raw, ["TMAX", "tmax"])
-    station_col = _select_column(raw, ["STATION", "station", "station_id"])
-    name_col = _select_column(raw, ["NAME", "name", "station_name"])
+    tmax_col = _select_column(
+        raw, ["TMAX", "tmax", "actual_high", "official_daily_high_f"]
+    )
+    station_col = _select_column(raw, ["STATION", "station", "station_id", "source_station"])
+    name_col = _select_column(raw, ["NAME", "name", "station_name", "source_station_name"])
     if date_col is None or tmax_col is None:
         raise ValueError(f"Official daily high file is missing DATE or TMAX: {path}")
 
@@ -465,6 +469,26 @@ def _standardize_nws_hourly_frame(raw: pd.DataFrame, *, path: Path) -> pd.DataFr
         if source in result.columns:
             result[alias] = result[source]
 
+    # A truncated upstream METAR is not an observation. Preserve it as a
+    # blocked source range instead of imputing it or retaining corrupt fields.
+    essential = [
+        name
+        for name in [
+            "nws_current_temp_f",
+            "nws_dew_point_f",
+            "nws_relative_humidity",
+            "nws_altimeter",
+        ]
+        if name in result
+    ]
+    incomplete = result[essential].isna().all(axis=1) if essential else pd.Series(False, index=result.index)
+    if "nws_metar" in result:
+        incomplete &= result["nws_metar"].fillna("").astype(str).str.len().lt(24)
+    blocked = result.loc[incomplete, ["station", "timestamp", "source_file"]].copy()
+    if not blocked.empty:
+        blocked["reason"] = "truncated_source_record_no_observation"
+        result = result.loc[~incomplete].copy()
+    result.attrs["blocked_ranges"] = blocked.to_dict(orient="records")
     _validate_asos_ranges(result, path=path)
     return result
 
@@ -483,11 +507,18 @@ def load_nws_hourly_observations(path_or_dir: str | Path) -> pd.DataFrame:
         raise FileNotFoundError(f"No IEM/NWS ASOS hourly CSV found under {Path(path_or_dir)}")
 
     frames = []
+    blocked_ranges: list[dict[str, object]] = []
     best_score = candidates[0][0]
     for score, path, raw in candidates:
         if score < best_score:
             continue
-        frames.append(_standardize_nws_hourly_frame(raw, path=path))
+        frame = _standardize_nws_hourly_frame(raw, path=path)
+        blocked_ranges.extend(frame.attrs.get("blocked_ranges", []))
+        frame = frame.sort_values(["station", "timestamp"], kind="mergesort")
+        frame = frame.drop_duplicates(
+            subset=["location", "station", "timestamp"], keep="last"
+        )
+        frames.append(frame)
 
     result = pd.concat(frames, ignore_index=True)
     station_upper = result["station"].astype(str).str.upper()
@@ -496,7 +527,11 @@ def load_nws_hourly_observations(path_or_dir: str | Path) -> pd.DataFrame:
         result = preferred
 
     result = result.drop_duplicates()
-    result = result.sort_values(["station", "timestamp"]).reset_index(drop=True)
+    result = result.drop_duplicates(
+        subset=["location", "station", "timestamp"], keep="first"
+    )
+    result = result.sort_values(["station", "timestamp"], kind="mergesort").reset_index(drop=True)
+    result.attrs["blocked_ranges"] = blocked_ranges
     for column in NWS_HOURLY_COLUMNS:
         if column not in result.columns:
             result[column] = np.nan
