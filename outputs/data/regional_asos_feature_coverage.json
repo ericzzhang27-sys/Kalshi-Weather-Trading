@@ -1,0 +1,30 @@
+{
+  "generated_at_utc": "2026-08-26T16:35:25+00:00",
+  "requested_start_local_date": "2018-01-01",
+  "requested_end_local_date": "2026-08-26",
+  "hourly_rows": 75828,
+  "raw_observation_rows": 358951,
+  "first_prediction_time_utc": "2018-01-01 05:00:00+00:00",
+  "last_prediction_time_utc": "2026-08-26 16:00:00+00:00",
+  "first_prediction_time_local": "2018-01-01 00:00:00-05:00",
+  "last_prediction_time_local": "2026-08-26 12:00:00-04:00",
+  "all_four_station_temp_fraction": 0.99698,
+  "at_least_three_station_temp_fraction": 0.999881,
+  "temperature_missing_fraction": {
+    "knyc": 0.002664,
+    "klga": 0.000211,
+    "kjfk": 7.9e-05,
+    "kewr": 0.000224
+  },
+  "max_observation_age_minutes": 90,
+  "stations": {
+    "knyc": "NYC",
+    "klga": "LGA",
+    "kjfk": "JFK",
+    "kewr": "EWR"
+  },
+  "underlying_product": "NOAA/NWS/FAA ASOS/METAR",
+  "transport": "Iowa Environmental Mesonet archive and real-time ingest",
+  "asof_rule": "observation_time <= prediction_time; backward-only merge",
+  "caveat": "Historical IEM does not preserve exact network ingest time; valid-time safety is enforced, but minute-level dissemination latency is not reconstructable."
+}
