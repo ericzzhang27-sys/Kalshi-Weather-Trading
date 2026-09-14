@@ -18,6 +18,7 @@ DEFAULT_END = date.today().isoformat()
 DEFAULT_ASOS_OUTPUT = Path("data/raw/NYC_nws_hourly_2018_2026.csv")
 DEFAULT_CLI_OUTPUT = Path("data/processed/knyc_cli_daily_2018_2026.csv")
 DEFAULT_COVERAGE_OUTPUT = Path("outputs/data/knyc_backfill_coverage.json")
+# Shared by build_regional_asos_features.py so both backfills use the same archive/retry policy.
 ASOS_MIN_REQUEST_INTERVAL_SECONDS = 1.1
 
 ASOS_COLUMNS = [
