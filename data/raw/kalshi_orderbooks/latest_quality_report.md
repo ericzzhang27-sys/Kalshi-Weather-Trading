@@ -1,7 +1,7 @@
 # Orderbook Scraper Quality Report
 
-- Cycle ID: `20261003T061753Z`
-- Fetched at: `2026-10-03T06:17:53.460394+00:00`
+- Cycle ID: `20261003T122350Z`
+- Fetched at: `2026-10-03T12:23:50.027857+00:00`
 - Status: **OK**
 - Markets matched: 6
 - Markets scraped: 6
