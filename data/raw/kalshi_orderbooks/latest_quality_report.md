@@ -1,11 +1,11 @@
 # Orderbook Scraper Quality Report
 
-- Cycle ID: `20261117T213833Z`
-- Fetched at: `2026-11-17T21:38:33.722105+00:00`
+- Cycle ID: `20261118T033117Z`
+- Fetched at: `2026-11-18T03:31:17.619323+00:00`
 - Status: **OK**
 - Markets matched: 12
 - Markets scraped: 12
-- Level rows: 596
+- Level rows: 592
 - Summary rows: 12
 - Violations: 0 (0 FAIL / 0 WARN)
 
